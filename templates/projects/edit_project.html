@@ -1,0 +1,26 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>Edit Project - {{ project.name }}</h1></div>
+<div class="card">
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <label>Project Name</label>
+    <input type="text" name="name" class="form-control" maxlength="150" value="{{ project.name }}" required>
+
+    <label>Description</label>
+    <textarea name="description" class="form-control" rows="3">{{ project.description }}</textarea>
+
+    <label>Project Requirements File</label>
+    <input type="file" name="requirements_file" class="form-control">
+    {% if project.requirements_file %}<p style="font-size:0.8rem; color:var(--grey-500); margin-top:-8px;">Current file: <a href="{{ project.requirements_file.url }}">{{ project.requirements_file.name }}</a></p>{% endif %}
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>Start Date</label><input type="date" name="start_date" class="form-control" value="{{ project.start_date|date:'Y-m-d' }}"></div>
+      <div><label>End Date</label><input type="date" name="end_date" class="form-control" value="{{ project.end_date|date:'Y-m-d' }}"></div>
+    </div>
+
+    <button type="submit" class="btn btn-primary" style="margin-top:10px;">Save Changes</button>
+    <a href="{% url 'projects:project_detail' project.id %}" class="btn btn-outline" style="margin-top:10px;">Cancel</a>
+  </form>
+</div>
+{% endblock %}

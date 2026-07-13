@@ -1,0 +1,21 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>Salary Structures</h1></div>
+<div class="card">
+  <table>
+    <tr><th>Employee</th><th>Basic</th><th>HRA</th><th>Allowances</th><th>Bonus</th><th>Gross</th><th>PF</th><th></th></tr>
+    {% for s in structures %}
+    <tr>
+      <td>{{ s.user.get_full_name|default:s.user.username }}</td>
+      <td>Rs. {{ s.basic }}</td>
+      <td>Rs. {{ s.hra }}</td>
+      <td>Rs. {{ s.other_allowances }}</td>
+      <td>Rs. {{ s.bonus }}</td>
+      <td>Rs. {{ s.gross }}</td>
+      <td>{% if s.pf_applicable %}{{ s.pf_percent }}%{% else %}Not Applicable{% endif %}</td>
+      <td><a href="{% url 'payroll:edit_salary_structure' s.user.id %}" class="btn btn-outline btn-sm">Edit</a></td>
+    </tr>
+    {% empty %}<tr><td colspan="8" class="empty-state">No salary structures set up yet.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

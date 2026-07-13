@@ -1,0 +1,54 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>Leave Approvals</h1></div>
+
+<div class="card">
+  <table>
+    <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Reason</th><th>Status</th><th></th></tr>
+    {% for r in requests %}
+    <tr>
+      <td>{{ r.user.get_full_name|default:r.user.username }}</td>
+      <td>{{ r.get_leave_type_display }}</td>
+      <td>{{ r.start_date }} - {{ r.end_date }}</td>
+      <td>{{ r.num_days }}</td>
+      <td>{{ r.reason|default:"-" }}</td>
+      <td>
+        {% if r.status == 'APPROVED' %}<span class="badge badge-success">Approved</span>
+        {% elif r.status == 'REJECTED' %}<span class="badge badge-danger">Rejected</span>
+        {% elif r.status == 'PENDING_HR' %}<span class="badge badge-warning">Pending HR</span>
+        {% else %}<span class="badge badge-warning">Pending Manager</span>{% endif %}
+      </td>
+      <td>
+        {% if user.role == 'MANAGER' and r.status == 'PENDING_MANAGER' %}
+          <a href="{% url 'leaves:review_leave' r.id 'approve' %}" class="btn btn-primary btn-sm">Approve</a>
+          <a href="{% url 'leaves:review_leave' r.id 'reject' %}" class="btn btn-danger btn-sm">Reject</a>
+        {% elif user.role == 'HR' and r.status == 'PENDING_HR' %}
+          <a href="{% url 'leaves:review_leave' r.id 'approve' %}" class="btn btn-primary btn-sm">Approve</a>
+          <a href="{% url 'leaves:review_leave' r.id 'reject' %}" class="btn btn-danger btn-sm">Reject</a>
+        {% elif user.role == 'ADMIN' %}
+          <span class="badge badge-info">View only</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}<tr><td colspan="7" class="empty-state">No leave requests.</td></tr>{% endfor %}
+  </table>
+</div>
+
+{% if manager_approved_notices is not None %}
+<div class="card">
+  <h3>Employees on Approved Leave <span class="badge badge-info" style="font-weight:500;">Informational — no action needed</span></h3>
+  <table>
+    <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Approved By (Manager)</th><th>Approved On</th></tr>
+    {% for r in manager_approved_notices %}
+    <tr>
+      <td>{{ r.user.get_full_name|default:r.user.username }}</td>
+      <td>{{ r.get_leave_type_display }}</td>
+      <td>{{ r.start_date }} - {{ r.end_date }}</td>
+      <td>{{ r.reviewed_by_manager }}</td>
+      <td>{{ r.manager_reviewed_at|date:"d M Y, h:i A" }}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty-state">No recent manager-approved leaves.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

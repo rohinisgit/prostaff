@@ -1,0 +1,48 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>My Leave</h1></div>
+<div class="stat-grid">
+  <div class="stat-card"><div class="stat-value">{{ balance.cl_balance }}</div><div class="stat-label">Casual Leave</div></div>
+  <div class="stat-card"><div class="stat-value">{{ balance.el_balance }}</div><div class="stat-label">Earned Leave</div></div>
+  <div class="stat-card orange"><div class="stat-value">{{ balance.sick_balance }}</div><div class="stat-label">Sick Leave</div></div>
+</div>
+
+<div class="card">
+  <h3>Request Leave</h3>
+  <form method="post">
+    {% csrf_token %}
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0 20px;">
+      <div><label>Leave Type</label>
+        <select name="leave_type" class="form-control" required>
+          <option value="CL">Casual Leave</option><option value="EL">Earned Leave</option><option value="SICK">Sick Leave</option>
+        </select>
+      </div>
+      <div><label>Start Date</label><input type="date" name="start_date" class="form-control" required></div>
+      <div><label>End Date</label><input type="date" name="end_date" class="form-control" required></div>
+    </div>
+    <label>Reason</label>
+    <textarea name="reason" class="form-control" rows="2"></textarea>
+    <button type="submit" class="btn btn-primary">Submit Request</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>My Requests</h3>
+  <table>
+    <tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th></tr>
+    {% for r in requests %}
+    <tr>
+      <td>{{ r.get_leave_type_display }}</td>
+      <td>{{ r.start_date }} - {{ r.end_date }}</td>
+      <td>{{ r.num_days }}</td>
+<td>
+  {% if r.status == 'APPROVED' %}<span class="badge badge-success">Approved</span>
+  {% elif r.status == 'REJECTED' %}<span class="badge badge-danger">Rejected</span>
+  {% elif r.status == 'PENDING_HR' %}<span class="badge badge-warning">Pending HR</span>
+  {% else %}<span class="badge badge-warning">Pending Manager</span>{% endif %}
+</td>
+    </tr>
+    {% empty %}<tr><td colspan="4" class="empty-state">No leave requests yet.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

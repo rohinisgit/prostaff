@@ -1,0 +1,23 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>My Payslips</h1></div>
+<div class="card">
+  <table>
+    <tr><th>Pay Period</th><th>Days Present</th><th>Hours</th><th>Basic</th><th>HRA</th><th>Allowances</th><th>Bonus</th><th>PF Deducted</th><th>Net Pay</th><th></th></tr>
+    {% for p in payslips %}
+    <tr>
+      <td>{{ p.payroll_run.start_date }} - {{ p.payroll_run.end_date }}</td>
+      <td>{{ p.days_present }}</td>
+      <td>{{ p.total_hours_worked }}</td>
+      <td>Rs. {{ p.basic }}</td>
+      <td>Rs. {{ p.hra }}</td>
+      <td>Rs. {{ p.allowances }}</td>
+      <td>Rs. {{ p.bonus }}</td>
+      <td>Rs. {{ p.pf_deduction }}</td>
+      <td><strong>Rs. {{ p.net_pay }}</strong></td>
+      <td><a href="{% url 'payroll:download_payslip' p.id %}" class="btn btn-outline btn-sm">Download PDF</a></td>
+    </tr>
+    {% empty %}<tr><td colspan="10" class="empty-state">No payslips released yet.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

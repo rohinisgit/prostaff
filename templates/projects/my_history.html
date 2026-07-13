@@ -1,0 +1,13 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>My Project History</h1></div>
+<div class="card">
+  <table>
+    <tr><th>Project</th><th>Role</th><th>Start</th><th>Status</th></tr>
+    {% for a in assignments %}
+    <tr><td>{{ a.project.name }}</td><td>{{ a.role_on_project|default:"-" }}</td><td>{{ a.start_date|default:"-" }}</td>
+      <td>{% if a.is_current %}<span class="badge badge-success">Current</span>{% else %}<span class="badge badge-info">Past</span>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="4" class="empty-state">No project history.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

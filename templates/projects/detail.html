@@ -1,0 +1,117 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header">
+  <h1>
+    {{ project.name }}
+    {% if project.status == 'COMPLETED' %}<span class="badge badge-success">Completed</span>{% endif %}
+  </h1>
+  <div>
+    {% if can_manage_project %}
+    <a href="{% url 'projects:edit_project' project.id %}" class="btn btn-outline btn-sm">Edit Project</a>
+    <a href="{% url 'projects:delete_project' project.id %}" class="btn btn-danger btn-sm">Delete Project</a>
+    {% endif %}
+    {% if can_complete_project %}
+    <form method="post" action="{% url 'projects:complete_project' project.id %}" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-accent btn-sm">Mark as Completed</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <p>{{ project.description|default:"No description provided." }}</p>
+  <p>
+    <strong>Lead:</strong> {{ project.lead|default:"Unassigned" }} &nbsp;|&nbsp;
+    <strong>Dates:</strong> {{ project.start_date|default:"-" }} to {{ project.end_date|default:"-" }}
+  </p>
+  {% if project.requirements_file %}
+  <p><a href="{{ project.requirements_file.url }}" class="btn btn-outline btn-sm">Download Requirements</a></p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Team</h3>
+  <table>
+    <tr><th>Employee</th><th>Role on Project</th><th>Start</th><th>Status</th></tr>
+    {% for a in assignments %}
+    <tr>
+      <td>{{ a.user }}{% if project.lead_id == a.user_id %} <span class="badge badge-info">Lead</span>{% endif %}</td>
+      <td>{{ a.role_on_project|default:"-" }}</td>
+      <td>{{ a.start_date|default:"-" }}</td>
+      <td>{% if a.is_current %}<span class="badge badge-success">Current</span>{% else %}<span class="badge badge-info">Past</span>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="4" class="empty-state">No team members assigned.</td></tr>{% endfor %}
+  </table>
+  {% if can_edit %}
+  <form method="post" style="margin-top:14px; display:flex; gap:10px; align-items:end;">
+    {% csrf_token %}
+    <div style="flex:1;"><label>Employee</label>
+      <select name="user" class="form-control" required>{% for e in employees %}<option value="{{ e.id }}">{{ e.get_full_name|default:e.username }}</option>{% endfor %}</select>
+    </div>
+    <div style="flex:1;"><label>Role</label><input type="text" name="role_on_project" class="form-control"></div>
+    <div style="flex:1;"><label>Start Date</label><input type="date" name="start_date" class="form-control"></div>
+    <button type="submit" class="btn btn-accent" style="margin-bottom:14px;">Assign</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if is_lead %}
+<div class="card">
+  <h3>Submit Update for Review</h3>
+  <form method="post" action="{% url 'projects:submit_update' project.id %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <label>Notes</label>
+    <textarea name="notes" class="form-control" rows="3" placeholder="Describe your progress or the work completed..."></textarea>
+    <label>Attach File (optional)</label>
+    <input type="file" name="file" class="form-control">
+    <button type="submit" class="btn btn-primary">Submit for Review</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>Submission History</h3>
+  <table>
+    <tr>
+      <th>Submitted By</th><th>Notes</th><th>File</th><th>Status</th><th>Feedback</th>
+      {% if can_approve_submissions or can_request_corrections or request.user.role == 'ADMIN' %}<th></th>{% endif %}
+    </tr>
+    {% for s in submissions %}
+    <tr>
+      <td>{{ s.submitted_by }}<br><span style="color:var(--grey-500); font-size:0.8rem;">{{ s.submitted_at|date:"d M Y, h:i A" }}</span></td>
+      <td>{{ s.notes|default:"-"|truncatewords:20 }}</td>
+      <td>{% if s.file %}<a href="{{ s.file.url }}" class="btn btn-outline btn-sm">View</a>{% else %}-{% endif %}</td>
+      <td>
+        {% if s.status == 'APPROVED' %}<span class="badge badge-success">Approved</span>
+        {% elif s.status == 'NEEDS_CORRECTION' %}<span class="badge badge-danger">Needs Correction</span>
+        {% else %}<span class="badge badge-warning">Pending Review</span>{% endif %}
+      </td>
+      <td>{{ s.feedback|default:"-" }}</td>
+      {% if can_approve_submissions or can_request_corrections %}
+      <td>
+        {% if s.status == 'PENDING_REVIEW' %}
+          {% if can_approve_submissions %}
+          <form method="post" action="{% url 'projects:review_submission' s.id 'approve' %}" style="margin-bottom:6px;">
+            {% csrf_token %}
+            <input type="text" name="feedback" class="form-control" placeholder="Feedback (optional)" style="margin-bottom:6px;">
+            <button type="submit" class="btn btn-primary btn-sm">Approve</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{% url 'projects:review_submission' s.id 'correct' %}">
+            {% csrf_token %}
+            <input type="text" name="feedback" class="form-control" placeholder="What needs fixing?" style="margin-bottom:6px;">
+            <button type="submit" class="btn btn-danger btn-sm">Request Corrections</button>
+          </form>
+        {% else %}
+        <span class="badge badge-info">Reviewed</span>
+        {% endif %}
+      </td>
+      {% elif request.user.role == 'ADMIN' %}
+      <td><span class="badge badge-info">View only</span></td>
+      {% endif %}
+    </tr>
+    {% empty %}<tr><td colspan="6" class="empty-state">No updates submitted yet.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

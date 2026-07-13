@@ -1,0 +1,136 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ emp_user.get_full_name|default:emp_user.username }}</h1>
+  <div>
+    <a href="{% url 'attendance:employee_attendance' emp_user.id %}" class="btn btn-outline btn-sm">Attendance</a>
+    <a href="{% url 'payroll:edit_salary_structure' emp_user.id %}" class="btn btn-outline btn-sm">Salary</a>
+    {% if profile.status == 'ONBOARDING' and request.user.role == 'HR' %}
+    <form method="post" action="{% url 'employees:complete_onboarding' emp_user.id %}" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-accent btn-sm">Mark Onboarding Complete</button>
+    </form>
+    {% endif %}
+    {% if profile.status == 'EXITED' and request.user.role == 'HR' %}
+    <a href="{% url 'employees:delete_employee' emp_user.id %}" class="btn btn-danger btn-sm">Delete</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h3>Profile</h3>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px 24px;">
+    <div><label>Employee ID</label><p style="margin:0;">{{ emp_user.employee_id|default:"-" }}</p></div>
+    <div><label>Role</label><p style="margin:0;">{{ emp_user.get_role_display }}</p></div>
+    <div><label>Department</label><p style="margin:0;">{{ emp_user.department|default:"-" }}</p></div>
+    <div><label>Email</label><p style="margin:0;">{{ emp_user.email|default:"-" }}</p></div>
+    <div><label>Phone</label><p style="margin:0;">{% if emp_user.phone %}{{ emp_user.phone_country_code }} {{ emp_user.phone }}{% else %}-{% endif %}</p></div>
+    <div><label>Joined</label><p style="margin:0;">{{ emp_user.date_joined_company|default:"-" }}</p></div>
+    <div><label>Status</label>
+      <p style="margin:0;">
+        {% if profile.status == 'EXITED' %}<span class="badge badge-danger">Exited</span>
+        {% elif profile.status == 'ONBOARDING' %}<span class="badge badge-warning">Onboarding</span>
+        {% else %}<span class="badge badge-success">Active</span>{% endif %}
+      </p>
+    </div>
+  </div>
+  <p style="color:var(--grey-500); font-size:0.8rem; margin:14px 0 0;">
+    Personal, banking and emergency contact details are managed by the employee themselves under My Profile.
+  </p>
+</div>
+
+{% if latest_resignation %}
+<div class="card">
+  <h3>Resignation</h3>
+  <div style="padding:12px 14px; background:var(--grey-50); border-radius:8px; margin-bottom:14px;">
+    <label style="margin:0 0 4px;">Reason</label>
+    <p style="margin:0;">{{ latest_resignation.reason }}</p>
+  </div>
+
+  {% if latest_resignation.status == 'ACCEPTED' %}
+  <div style="display:flex; gap:32px; flex-wrap:wrap; margin-bottom:10px;">
+    <div><label style="margin:0 0 2px;">Notice Period</label><p style="margin:0; font-weight:600;">{{ latest_resignation.notice_period_days }} days</p></div>
+    <div><label style="margin:0 0 2px;">Exit Date</label><p style="margin:0; font-weight:600;">{{ latest_resignation.exit_date }}</p></div>
+  </div>
+  {% endif %}
+
+  <p style="margin:0 0 10px;">
+    {% if latest_resignation.status == 'PENDING' %}<span class="badge badge-warning">Pending HR Review</span>
+    {% elif latest_resignation.status == 'NEGOTIATING' %}<span class="badge badge-info">Offer Sent — Awaiting Employee</span>
+    {% elif latest_resignation.status == 'ACCEPTED' %}<span class="badge badge-danger">Approved — Exiting</span>
+    {% elif latest_resignation.status == 'REJECTED' %}<span class="badge badge-danger">Rejected</span>
+    {% elif latest_resignation.status == 'WITHDRAWN' %}<span class="badge badge-success">Withdrawn</span>{% endif %}
+  </p>
+
+  {% if latest_resignation.status == 'PENDING' and request.user.role == 'HR' %}
+  <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+    <form method="post" action="{% url 'employees:reject_resignation' latest_resignation.id %}" style="margin:0;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline btn-sm">Reject</button>
+    </form>
+    <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('negotiate-panel').classList.toggle('open-panel')">Negotiate</button>
+    <button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById('approve-panel').classList.toggle('open-panel')">Approve</button>
+  </div>
+  <div id="approve-panel" class="negotiate-panel">
+    <form method="post" action="{% url 'employees:approve_resignation' latest_resignation.id %}" style="margin-top:12px; padding:14px; background:var(--grey-50); border-radius:8px;">
+      {% csrf_token %}
+      <label>Notice Period</label>
+      <select name="notice_period_days" class="form-control">
+        <option value="0">Relieve Immediately (0 days)</option>
+        <option value="7">1 Week</option>
+        <option value="15">15 Days</option>
+        <option value="30" selected>1 Month (Standard)</option>
+        <option value="60">2 Months</option>
+        <option value="90">3 Months</option>
+      </select>
+      <button type="submit" class="btn btn-danger btn-sm">Confirm Approval</button>
+    </form>
+  </div>
+  <div id="negotiate-panel" class="negotiate-panel">
+    <form method="post" action="{% url 'employees:negotiate_resignation' latest_resignation.id %}" style="margin-top:12px; padding:14px; background:var(--grey-50); border-radius:8px;">
+      {% csrf_token %}
+      <textarea name="message" class="form-control" rows="3" placeholder="Message to the employee..." required></textarea>
+      <button type="submit" class="btn btn-danger btn-sm">Send Message</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if emp_user.role != 'ADMIN' %}
+{% if request.user.role == 'ADMIN' or emp_user.role == 'EMPLOYEE' or emp_user.role == 'MANAGER' %}
+<div class="card">
+  <h3>Role & Access</h3>
+  <form method="post" action="{% url 'employees:change_role' emp_user.id %}" style="display:flex; gap:10px; align-items:end;">
+    {% csrf_token %}
+    <div style="flex:1;"><label>Role</label>{{ role_form.role }}</div>
+    <button type="submit" class="btn btn-accent" style="margin-bottom:14px;">Update Role</button>
+  </form>
+  {% if request.user.role == 'HR' %}
+  <p style="color:var(--grey-500); font-size:0.8rem; margin:0;">HR can only assign Employee or Manager. Contact Admin to grant HR/Admin access.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endif %}
+
+<div class="card">
+  <h3>Documents</h3>
+  <table>
+    <tr><th>Type</th><th>Uploaded</th><th></th></tr>
+    {% for doc in documents %}
+    <tr><td>{{ doc.get_doc_type_display }}</td><td>{{ doc.uploaded_at|date:"d M Y" }}</td><td><a href="{{ doc.file.url }}" class="btn btn-outline btn-sm">View</a></td></tr>
+    {% empty %}<tr><td colspan="3" class="empty-state">No documents uploaded.</td></tr>{% endfor %}
+  </table>
+  {% if request.user.role == 'HR' %}
+  <form method="post" action="{% url 'employees:upload_document' emp_user.id %}" enctype="multipart/form-data" style="margin-top:14px; display:flex; gap:10px; align-items:end;">
+    {% csrf_token %}
+    <div style="flex:1;"><label>Official Document Type</label>{{ doc_form.doc_type }}</div>
+    <div style="flex:1;"><label>File</label>{{ doc_form.file }}</div>
+    <button type="submit" class="btn btn-accent" style="margin-bottom:14px;">Upload</button>
+  </form>
+  <p style="color:var(--grey-500); font-size:0.8rem; margin:6px 0 0;">
+    HR can only upload official letters here (Offer / Appointment). The employee's own personal documents (degree, PAN, Aadhar, etc.) are uploaded by them from their own profile.
+  </p>
+  {% endif %}
+</div>
+{% endblock %}

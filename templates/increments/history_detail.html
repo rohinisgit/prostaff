@@ -1,0 +1,53 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ emp_user.get_full_name|default:emp_user.username }} — Increment History</h1>
+  <a href="{% url 'increments:list' %}" class="btn btn-outline btn-sm">&larr; Back to Increments</a>
+</div>
+
+{% for i in increments %}
+<div class="card increment-card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h3 style="margin:0 0 4px;">Effective {{ i.effective_date }}</h3>
+      <p style="margin:0; color:var(--grey-500); font-size:0.82rem;">Requested {{ i.created_at|date:"d M Y" }} by {{ i.requested_by|default:"—" }}</p>
+    </div>
+    {% if i.status == 'APPROVED' %}<span class="badge badge-success">Approved</span>
+    {% elif i.status == 'REJECTED' %}<span class="badge badge-danger">Rejected</span>{% endif %}
+  </div>
+
+  <div class="increment-stats">
+    <div><label>Previous Salary</label><p>Rs. {{ i.current_basic }}</p></div>
+    <div><label>New Salary</label><p>Rs. {{ i.requested_basic }}</p></div>
+    <div><label>Change</label><p style="color:#1D9A55;">+{{ i.increment_percent }}%</p></div>
+    {% if i.approved_by %}<div><label>Decided By</label><p>{{ i.approved_by }}</p></div>{% endif %}
+  </div>
+
+  {% if i.reason %}
+  <div style="margin-bottom:14px;">
+    <label style="margin:0 0 4px;">Reason for Increment</label>
+    <p style="margin:0; color:var(--grey-700); font-size:0.9rem;">{{ i.reason }}</p>
+  </div>
+  {% endif %}
+
+  {% if i.feedback %}
+  <div style="padding:12px 14px; border-left:3px solid var(--electric-blue); background:var(--grey-50); border-radius:0 8px 8px 0;">
+    <label style="margin:0 0 4px;">Manager's Review</label>
+    {% if i.feedback.suggestion == 'SUGGEST' %}<span class="badge badge-success">Suggested increment</span>
+    {% elif i.feedback.suggestion == 'NOT_SUGGEST' %}<span class="badge badge-danger">Didn't suggest</span>
+    {% else %}<span class="badge badge-warning">Neutral</span>{% endif %}
+    {% if i.feedback.description %}<p style="margin:8px 0 0; font-size:0.85rem; color:var(--grey-700);">{{ i.feedback.description }}</p>{% endif %}
+    <p style="margin:6px 0 0; font-size:0.75rem; color:var(--grey-500);">— {{ i.feedback.manager|default:"Manager" }}</p>
+  </div>
+  {% elif i.feedback_manager %}
+  <p style="color:var(--grey-500); font-size:0.82rem; margin:0;">No feedback was recorded from {{ i.feedback_manager }}.</p>
+  {% else %}
+  <p style="color:var(--grey-500); font-size:0.82rem; margin:0;">Feedback wasn't required ({{ emp_user.get_role_display }}).</p>
+  {% endif %}
+</div>
+{% empty %}
+<div class="card"><p class="empty-state">No finalized increments for this employee yet.</p></div>
+{% endfor %}
+
+<a href="{% url 'increments:list' %}" class="btn btn-outline">&larr; Back to Increments</a>
+{% endblock %}

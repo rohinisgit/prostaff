@@ -1,0 +1,39 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="{% static 'images/logo1.png' %}">
+  <title>Login - ProStaff</title>
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+  <div class="login-wrap">
+    <div>
+      <div class="login-hero">
+        <img src="{% static 'images/signuplogo.png' %}" alt="ProStaff">
+      </div>
+      <div class="login-card">
+        <div class="login-accent"></div>
+        <h1>Welcome back</h1>
+        <p class="subtitle">Sign in to your HRMS account</p>
+        {% if form.errors %}
+          <ul class="messages"><li class="error">Invalid username or password.</li></ul>
+        {% endif %}
+        <form method="post">
+          {% csrf_token %}
+          <label>Username</label>
+          {{ form.username }}
+          <label>Password</label>
+          {{ form.password }}
+          <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">Sign In</button>
+        </form>
+        <p style="text-align:center; margin-top:16px; font-size:0.85rem; color:var(--grey-700);">
+          <a href="{% url 'core:password_reset' %}">Forgot your password?</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

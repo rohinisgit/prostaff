@@ -1,0 +1,44 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ emp_user.get_full_name|default:emp_user.username }}</h1>
+  <a href="{% url 'employees:my_department' %}" class="btn btn-outline btn-sm">&larr; Back to My Department</a>
+</div>
+
+<div class="card">
+  <h3>Profile</h3>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px 24px;">
+    <div><label>Employee ID</label><p style="margin:0;">{{ emp_user.employee_id|default:"-" }}</p></div>
+    <div><label>Designation</label><p style="margin:0;">{{ profile.designation|default:"-" }}</p></div>
+    <div><label>Role</label><p style="margin:0;">{{ emp_user.get_role_display }}</p></div>
+    <div><label>Department</label><p style="margin:0;">{{ emp_user.department|default:"-" }}</p></div>
+    <div><label>Email</label><p style="margin:0;">{{ emp_user.email|default:"-" }}</p></div>
+    <div><label>Phone</label><p style="margin:0;">{% if emp_user.phone %}{{ emp_user.phone_country_code }} {{ emp_user.phone }}{% else %}-{% endif %}</p></div>
+    <div><label>Status</label>
+      <p style="margin:0;">
+        {% if profile.status == 'EXITED' %}<span class="badge badge-danger">Exited</span>
+        {% elif is_onboarding %}<span class="badge badge-warning">Onboarding</span>
+        {% elif is_present_today %}<span class="badge badge-success">Active</span>
+        {% else %}<span class="badge badge-warning">Inactive</span>{% endif %}
+      </p>
+    </div>
+    <div><label>Joined</label><p style="margin:0;">{{ emp_user.date_joined_company|default:"-" }}</p></div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Recent Attendance</h3>
+  <table>
+    <tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr>
+    {% for r in records %}
+    <tr>
+      <td>{{ r.date }}</td>
+      <td>{{ r.in_time|time:"h:i A"|default:"-" }}</td>
+      <td>{{ r.out_time|time:"h:i A"|default:"-" }}</td>
+      <td>{{ r.total_hours }}</td>
+      <td>{% if r.is_late %}<span class="badge badge-warning">Late</span>{% else %}<span class="badge badge-success">On time</span>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty-state">No attendance records yet.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

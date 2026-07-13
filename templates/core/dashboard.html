@@ -1,0 +1,63 @@
+{% extends 'core/base.html' %}
+{% block title %}Dashboard - ProStaff{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Welcome, {{ user.get_full_name|default:user.username }}</h1>
+    <p>Here's what's happening today.</p>
+  </div>
+  {% if user.role != 'ADMIN' %}
+  <a href="{% url 'attendance:punch' %}" class="btn btn-accent">Go to Attendance</a>
+  {% endif %}
+</div>
+
+{% if user.role == 'ADMIN' %}
+<div class="stat-grid">
+  <div class="stat-card"><div class="stat-value">{{ hr_count }}</div><div class="stat-label">HR</div></div>
+  <div class="stat-card"><div class="stat-value">{{ manager_count }}</div><div class="stat-label">Managers</div></div>
+  <div class="stat-card"><div class="stat-value">{{ employee_count }}</div><div class="stat-label">Employees</div></div>
+</div>
+<div class="card">
+  <h3>Quick Actions</h3>
+  <div class="punch-btns" style="justify-content:flex-start; flex-wrap:wrap;">
+    <a href="{% url 'employees:directory' %}" class="btn btn-primary">Employee Directory</a>
+    <a href="{% url 'projects:list' %}" class="btn btn-outline">Projects</a>
+  </div>
+</div>
+
+{% elif user.role == 'HR' %}
+<div class="stat-grid">
+  <div class="stat-card"><div class="stat-value">{{ total_employees }}</div><div class="stat-label">Total Employees</div></div>
+  <div class="stat-card"><div class="stat-value">{{ active_employees }}</div><div class="stat-label">Active</div></div>
+</div>
+<div class="card">
+  <h3>Quick Actions</h3>
+  <div class="punch-btns" style="justify-content:flex-start; flex-wrap:wrap;">
+    <a href="{% url 'employees:onboard' %}" class="btn btn-primary">Onboard Employee</a>
+    <a href="{% url 'employees:directory' %}" class="btn btn-outline">Employee Directory</a>
+    <a href="{% url 'employees:onboarding_list' %}" class="btn btn-outline">View Onboarding</a>
+    <a href="{% url 'leaves:approvals' %}" class="btn btn-outline">Review Leave Requests</a>
+    <a href="{% url 'payroll:runs' %}" class="btn btn-outline">Payroll Runs</a>
+    <a href="{% url 'increments:create' %}" class="btn btn-outline">New Increment</a>
+  </div>
+</div>
+
+{% else %}
+<div class="stat-grid">
+  <div class="stat-card"><div class="stat-value">{{ month_attendance }}</div><div class="stat-label">Days Present This Month</div></div>
+  <div class="stat-card orange"><div class="stat-value">{{ my_pending_leaves }}</div><div class="stat-label">My Pending Leave Requests</div></div>
+  {% if user.is_manager %}
+  <div class="stat-card"><div class="stat-value">{{ team_size }}</div><div class="stat-label">Team Members</div></div>
+  {% endif %}
+</div>
+<div class="card">
+  <h3>Today</h3>
+  {% if today_record and today_record.in_time %}
+    <p>Punched in at <strong>{{ today_record.in_time|time:"h:i A" }}</strong>{% if today_record.out_time %}, punched out at <strong>{{ today_record.out_time|time:"h:i A" }}</strong>{% endif %}.</p>
+  {% else %}
+    <p>You haven't punched in today.</p>
+  {% endif %}
+  <a href="{% url 'attendance:punch' %}" class="btn btn-primary">Open Attendance</a>
+</div>
+{% endif %}
+{% endblock %}

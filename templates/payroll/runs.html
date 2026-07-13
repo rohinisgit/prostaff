@@ -1,0 +1,69 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>Payroll Runs</h1></div>
+
+{% for section in sections %}
+<div class="dir-section">
+  <div class="dir-section-header dir-role-{{ section.role|lower }}">
+    <span class="dir-role-name">{{ section.role_label }}</span>
+    <span class="dir-role-count">{{ section.employees|length }} {% if section.employees|length == 1 %}person{% else %}people{% endif %}</span>
+  </div>
+  <div class="card">
+    <table>
+      <tr><th>Employee</th><th>Department</th><th>Credit Salary</th><th></th></tr>
+      {% for item in section.employees %}
+      <tr>
+        <td>{{ item.user.get_full_name|default:item.user.username }}</td>
+        <td>{{ item.user.department|default:"-" }}</td>
+        <td>
+          {% if request.user.role == 'HR' %}
+          <form method="post" action="{% url 'payroll:credit_salary' item.user.id %}"
+                class="credit-form" data-credited="{{ item.credited_months }}"
+                style="display:flex; gap:8px; align-items:center; margin-bottom:0;">
+            {% csrf_token %}
+            <select name="month" class="form-control credit-month-select" style="margin-bottom:0; width:auto;">
+              {% for value, label in months %}
+              <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-accent btn-sm credit-btn">Credit Salary</button>
+            <span class="badge badge-success credit-done-badge" style="display:none;">Salary Credited</span>
+          </form>
+          {% else %}
+          <span class="badge badge-info">View only</span>
+          {% endif %}
+        </td>
+        <td><a href="{% url 'payroll:employee_payroll_history' item.user.id %}" class="btn btn-outline btn-sm">View Slips</a></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% empty %}
+<div class="card"><p class="empty-state">No employees found.</p></div>
+{% endfor %}
+
+<script>
+document.querySelectorAll('.credit-form').forEach(function (form) {
+  var select = form.querySelector('.credit-month-select');
+  var btn = form.querySelector('.credit-btn');
+  var badge = form.querySelector('.credit-done-badge');
+  var credited = (form.dataset.credited || '').split(',').filter(Boolean);
+
+  function updateState() {
+    if (credited.indexOf(select.value) !== -1) {
+      select.style.display = 'none';
+      btn.style.display = 'none';
+      badge.style.display = 'inline-flex';
+    } else {
+      select.style.display = '';
+      btn.style.display = '';
+      badge.style.display = 'none';
+    }
+  }
+
+  select.addEventListener('change', updateState);
+  updateState();
+});
+</script>
+{% endblock %}

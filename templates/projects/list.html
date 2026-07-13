@@ -1,0 +1,61 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header">
+  <h1>Projects</h1>
+  {% if user.is_manager %}
+  <a href="{% url 'projects:create' %}" class="btn btn-accent">+ Add Project</a>
+  {% endif %}
+</div>
+
+<div class="dir-section">
+  <div class="dir-section-header dir-role-manager">
+    <span class="dir-role-name">Active</span>
+    <span class="dir-role-count">{{ active_projects|length }}</span>
+  </div>
+  <div class="stat-grid">
+    {% for p in active_projects %}
+    <div class="card">
+      <h3 style="margin-top:0;"><a href="{% url 'projects:project_detail' p.id %}">{{ p.name }}</a></h3>
+      <p style="color:var(--grey-700);">{{ p.description|truncatewords:15 }}</p>
+      <p><strong>Lead:</strong> {{ p.lead|default:"Unassigned" }}</p>
+      <p><strong>Team size:</strong> {{ p.assignments.count }}</p>
+    </div>
+    {% empty %}<p class="empty-state">No active projects right now.</p>{% endfor %}
+  </div>
+</div>
+
+<div class="dir-section">
+  <div class="dir-section-header dir-role-employee">
+    <span class="dir-role-name">Upcoming (Soon)</span>
+    <span class="dir-role-count">{{ upcoming_projects|length }}</span>
+  </div>
+  <div class="stat-grid">
+    {% for p in upcoming_projects %}
+    <div class="card">
+      <h3 style="margin-top:0;"><a href="{% url 'projects:project_detail' p.id %}">{{ p.name }}</a></h3>
+      <p style="color:var(--grey-700);">{{ p.description|truncatewords:15 }}</p>
+      <p><strong>Lead:</strong> {{ p.lead|default:"Unassigned" }}</p>
+      <p><strong>Starts:</strong> {{ p.start_date }}</p>
+    </div>
+    {% empty %}<p class="empty-state">No upcoming projects.</p>{% endfor %}
+  </div>
+</div>
+
+<div class="dir-section">
+  <div class="dir-section-header" style="background:#1D9A55;">
+    <span class="dir-role-name">Successfully Completed</span>
+    <span class="dir-role-count">{{ completed_projects|length }}</span>
+  </div>
+  <div class="stat-grid">
+    {% for p in completed_projects %}
+    <div class="card">
+      <h3 style="margin-top:0;"><a href="{% url 'projects:project_detail' p.id %}">{{ p.name }}</a></h3>
+      <p style="color:var(--grey-700);">{{ p.description|truncatewords:15 }}</p>
+      <p><strong>Lead:</strong> {{ p.lead|default:"Unassigned" }}</p>
+      <p><strong>Team size:</strong> {{ p.assignments.count }}</p>
+      <span class="badge badge-success">Completed{% if p.completed_at %} on {{ p.completed_at|date:"d M Y" }}{% endif %}</span>
+    </div>
+    {% empty %}<p class="empty-state">No completed projects yet.</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

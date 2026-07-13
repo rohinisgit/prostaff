@@ -1,0 +1,71 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>New Increment Request</h1></div>
+<div class="card">
+  {% if form.errors %}
+  <ul class="messages"><li class="error">Please fix the highlighted fields below.</li></ul>
+  {% endif %}
+  <form method="post" id="increment-form">
+    {% csrf_token %}
+    <label>Employee</label>
+    {{ form.user }}
+    {% if form.user.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.user.errors.0 }}</p>{% endif %}
+
+    <div id="feedback-manager-wrap" style="display:none;">
+      <label>Manager (for Feedback)</label>
+      {{ form.feedback_manager }}
+      <p style="color:var(--grey-500); font-size:0.8rem; margin-top:-8px;">
+        This employee's increment needs manager feedback before you can approve or reject it.
+      </p>
+      {% if form.feedback_manager.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.feedback_manager.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div id="no-feedback-note" style="display:none;">
+      <p style="color:var(--grey-500); font-size:0.8rem; margin:-8px 0 14px;">
+        No manager feedback is needed for a Manager or Admin — you'll be able to approve or reject right away.
+      </p>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>New Basic Salary</label>{{ form.requested_basic }}{% if form.requested_basic.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.requested_basic.errors.0 }}</p>{% endif %}</div>
+      <div><label>Effective Date</label>{{ form.effective_date }}{% if form.effective_date.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.effective_date.errors.0 }}</p>{% endif %}</div>
+    </div>
+    <label>Reason</label>
+    {{ form.reason }}
+    <button type="submit" class="btn btn-primary" id="increment-submit-btn">Send for Feedback</button>
+  </form>
+
+  {{ user_roles_json|json_script:"user-roles-data" }}
+  <script>
+    (function () {
+      var ROLES = JSON.parse(document.getElementById('user-roles-data').textContent);
+      var userSelect = document.querySelector('#increment-form select[name="user"]');
+      var wrap = document.getElementById('feedback-manager-wrap');
+      var noFeedbackNote = document.getElementById('no-feedback-note');
+      var managerSelect = document.querySelector('#increment-form select[name="feedback_manager"]');
+      var submitBtn = document.getElementById('increment-submit-btn');
+
+      function update() {
+        var role = ROLES[userSelect.value];
+        if (role === 'EMPLOYEE') {
+          wrap.style.display = '';
+          noFeedbackNote.style.display = 'none';
+          submitBtn.textContent = 'Send for Feedback';
+        } else if (role) {
+          wrap.style.display = 'none';
+          if (managerSelect) managerSelect.value = '';
+          noFeedbackNote.style.display = '';
+          submitBtn.textContent = 'Create Increment';
+        } else {
+          wrap.style.display = 'none';
+          noFeedbackNote.style.display = 'none';
+          submitBtn.textContent = 'Send for Feedback';
+        }
+      }
+
+      userSelect.addEventListener('change', update);
+      update();
+    })();
+  </script>
+</div>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header">
+  <h1>My Profile</h1>
+  {% if can_apply_resignation %}
+    {% if pending_resignation.status == 'PENDING' %}
+    <span class="badge badge-warning">Resignation Pending HR Review</span>
+    {% elif pending_resignation.status == 'NEGOTIATING' %}
+    <span class="badge badge-info">HR Has Sent You an Offer — See Below</span>
+    {% elif profile.status != 'EXITED' %}
+    <a href="{% url 'employees:apply_resignation' %}" class="btn btn-danger">Apply for Resignation</a>
+    {% endif %}
+  {% endif %}
+</div>
+{% if pending_resignation.status == 'NEGOTIATING' %}
+<div class="card">
+  <h3>A Message From HR</h3>
+  <div style="padding:14px; background:var(--grey-50); border-radius:8px; margin-bottom:14px;">
+    <p style="margin:0;">{{ pending_resignation.hr_message }}</p>
+    <p style="margin:8px 0 0; font-size:0.75rem; color:var(--grey-500);">— {{ pending_resignation.hr_message_by|default:"HR" }}, {{ pending_resignation.hr_message_at|date:"d M Y, h:i A" }}</p>
+  </div>
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <form method="post" action="{% url 'employees:accept_resignation_offer' pending_resignation.id %}" style="margin:0;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">Accept Offer &amp; Stay</button>
+    </form>
+    <button type="button" class="btn btn-danger" onclick="document.getElementById('quit-panel').classList.toggle('open-panel')">I'd Still Like to Quit</button>
+  </div>
+
+  <div id="quit-panel" class="negotiate-panel">
+    <form method="post" action="{% url 'employees:quit_after_negotiation' pending_resignation.id %}" style="margin-top:14px;">
+      {% csrf_token %}
+      <label>Message to HR (optional)</label>
+      <textarea name="message" class="form-control" rows="3" placeholder="Let HR know your final decision..."></textarea>
+      <button type="submit" class="btn btn-danger">Confirm — I Want to Quit</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if profile.status == 'EXITED' %}
+<div class="card">
+  <p class="empty-state">Your resignation has been accepted. Exit date: {{ profile.exit_date }}.</p>
+</div>
+{% endif %}
+
+<div class="card">
+  {% if form.errors %}
+  <ul class="messages"><li class="error">Please fix the highlighted fields below.</li></ul>
+  {% endif %}
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>First Name</label>{{ form.first_name }}{% if form.first_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.first_name.errors.0 }}</p>{% endif %}</div>
+      <div><label>Last Name</label>{{ form.last_name }}{% if form.last_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.last_name.errors.0 }}</p>{% endif %}</div>
+      <div><label>Phone</label>
+        <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.phone_country_code }}{{ form.phone }}</div>
+        {% if form.phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.phone.errors.0 }}</p>{% endif %}
+      </div>
+      <div><label>Profile Photo</label>{{ form.profile_photo }}</div>
+    </div>
+    <label>Address</label>{{ form.address }}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>Bank Account</label>{{ form.bank_account }}{% if form.bank_account.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.bank_account.errors.0 }}</p>{% endif %}</div>
+      <div><label>IFSC Code</label>{{ form.ifsc_code }}{% if form.ifsc_code.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.ifsc_code.errors.0 }}</p>{% endif %}</div>
+      <div><label>PAN No.</label>{{ form.pan_no }}{% if form.pan_no.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.pan_no.errors.0 }}</p>{% endif %}</div>
+      <div><label>Aadhar No.</label>{{ form.aadhar_no }}{% if form.aadhar_no.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.aadhar_no.errors.0 }}</p>{% endif %}</div>
+      <div><label>Emergency Contact Name</label>{{ form.emergency_contact_name }}{% if form.emergency_contact_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.emergency_contact_name.errors.0 }}</p>{% endif %}</div>
+      <div><label>Emergency Contact Phone</label>
+        <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.emergency_contact_country_code }}{{ form.emergency_contact_phone }}</div>
+        {% if form.emergency_contact_phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.emergency_contact_phone.errors.0 }}</p>{% endif %}
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Save Changes</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>My Documents</h3>
+  <table>
+    <tr><th>Type</th><th>Uploaded</th><th></th></tr>
+    {% for doc in documents %}
+    <tr><td>{{ doc.get_doc_type_display }}</td><td>{{ doc.uploaded_at|date:"d M Y" }}</td><td><a href="{{ doc.file.url }}" class="btn btn-outline btn-sm">View</a></td></tr>
+    {% empty %}<tr><td colspan="3" class="empty-state">No documents uploaded yet.</td></tr>{% endfor %}
+  </table>
+  <form method="post" action="{% url 'employees:upload_own_document' %}" enctype="multipart/form-data" style="margin-top:14px; display:flex; gap:10px; align-items:end;">
+    {% csrf_token %}
+    <div style="flex:1;"><label>Document Type</label>{{ doc_form.doc_type }}</div>
+    <div style="flex:1;"><label>File</label>{{ doc_form.file }}</div>
+    <button type="submit" class="btn btn-accent" style="margin-bottom:14px;">Upload</button>
+  </form>
+  <p style="color:var(--grey-500); font-size:0.8rem; margin:6px 0 0;">
+    Upload your own personal documents here (degree certificate, PAN, Aadhar, ID proof, etc.)
+  </p>
+</div>
+{% endblock %}

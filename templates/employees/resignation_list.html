@@ -1,0 +1,95 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>Resignation Requests</h1></div>
+
+{% for r in resignations %}
+<div class="card" style="margin-bottom:14px;">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h3 style="margin:0 0 4px;">{{ r.user.get_full_name|default:r.user.username }}</h3>
+      <p style="margin:0; color:var(--grey-500); font-size:0.82rem;">{{ r.user.get_role_display }} &middot; Submitted {{ r.submitted_at|date:"d M Y" }}</p>
+    </div>
+    <div>
+      {% if r.status == 'PENDING' %}<span class="badge badge-warning">Pending Review</span>
+      {% elif r.status == 'NEGOTIATING' %}<span class="badge badge-info">Offer Sent — Awaiting Employee</span>
+      {% elif r.status == 'ACCEPTED' %}<span class="badge badge-danger">Approved — Exiting</span>
+      {% elif r.status == 'REJECTED' %}<span class="badge badge-danger">Rejected</span>
+      {% elif r.status == 'WITHDRAWN' %}<span class="badge badge-success">Withdrawn</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="margin:14px 0; padding:12px 14px; background:var(--grey-50); border-radius:8px;">
+    <label style="margin:0 0 4px;">Reason</label>
+    <p style="margin:0;">{{ r.reason }}</p>
+  </div>
+
+  {% if r.status == 'PENDING' and r.employee_reply %}
+  <div style="margin-bottom:14px; padding:12px 14px; border-left:3px solid var(--sunset-orange); background:#FFF7F2; border-radius:0 8px 8px 0;">
+    <label style="margin:0 0 4px;">Employee declined your offer</label>
+    <p style="margin:0;">{{ r.employee_reply }}</p>
+    <p style="margin:6px 0 0; font-size:0.75rem; color:var(--grey-500);">Please allot a notice period below.</p>
+  </div>
+  {% endif %}
+
+  {% if r.status == 'NEGOTIATING' %}
+  <div style="margin-bottom:14px; padding:12px 14px; border-left:3px solid var(--electric-blue); background:#F0F5FF; border-radius:0 8px 8px 0;">
+    <label style="margin:0 0 4px;">Your message to {{ r.user.first_name|default:r.user.username }}</label>
+    <p style="margin:0;">{{ r.hr_message }}</p>
+    <p style="margin:6px 0 0; font-size:0.75rem; color:var(--grey-500);">Sent {{ r.hr_message_at|date:"d M Y, h:i A" }} — waiting for their response.</p>
+  </div>
+  {% endif %}
+
+  {% if r.status == 'ACCEPTED' %}
+  <div style="display:flex; gap:32px; flex-wrap:wrap;">
+    <div><label style="margin:0 0 2px;">Notice Period</label><p style="margin:0; font-weight:600;">{{ r.notice_period_days }} days</p></div>
+    <div><label style="margin:0 0 2px;">Exit Date</label><p style="margin:0; font-weight:600;">{{ r.exit_date }}</p></div>
+  </div>
+  {% endif %}
+
+  {% if r.status == 'PENDING' and request.user.role == 'HR' %}
+  <div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+      <form method="post" action="{% url 'employees:reject_resignation' r.id %}" style="margin:0;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline btn-sm">Reject</button>
+      </form>
+      <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('negotiate-{{ r.id }}').classList.toggle('open-panel')">Negotiate</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('approve-{{ r.id }}').classList.toggle('open-panel')">Approve</button>
+    </div>
+
+    <div id="approve-{{ r.id }}" class="negotiate-panel">
+      <form method="post" action="{% url 'employees:approve_resignation' r.id %}" style="margin-top:12px; padding:14px; background:var(--grey-50); border-radius:8px;">
+        {% csrf_token %}
+        <label>Notice Period</label>
+        <select name="notice_period_days" class="form-control">
+          <option value="0">Relieve Immediately (0 days)</option>
+          <option value="7">1 Week</option>
+          <option value="15">15 Days</option>
+          <option value="30" selected>1 Month (Standard)</option>
+          <option value="60">2 Months</option>
+          <option value="90">3 Months</option>
+        </select>
+        <label>Or enter custom days</label>
+        <input type="number" name="custom_days" min="0" class="form-control" placeholder="e.g. 45">
+        <button type="submit" class="btn btn-primary btn-sm">Confirm Approval</button>
+      </form>
+    </div>
+
+    <div id="negotiate-{{ r.id }}" class="negotiate-panel">
+      <form method="post" action="{% url 'employees:negotiate_resignation' r.id %}" style="margin-top:12px; padding:14px; background:var(--grey-50); border-radius:8px;">
+        {% csrf_token %}
+        <label>Message to {{ r.user.first_name|default:r.user.username }}</label>
+        <textarea name="message" class="form-control" rows="3" placeholder="e.g. We'd like you to stay — can we discuss what would change your mind?" required></textarea>
+        <button type="submit" class="btn btn-primary btn-sm">Send Message</button>
+      </form>
+    </div>
+  </div>
+  {% elif r.status == 'PENDING' %}
+  <div style="display:flex; justify-content:flex-end;"><span class="badge badge-info">View only</span></div>
+  {% endif %}
+</div>
+{% empty %}
+<div class="card"><p class="empty-state">No resignation requests yet.</p></div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>Apply for Resignation</h1></div>
+<div class="card">
+  <p style="color:var(--grey-700);">Let HR know why you're planning to leave. HR will review it and get back to you — including your notice period, or an offer to negotiate.</p>
+  {% if form.errors %}
+  <ul class="messages"><li class="error">Please add a reason before submitting.</li></ul>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <label>Reason for Resigning</label>
+    {{ form.reason }}
+    {% if form.reason.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.reason.errors.0 }}</p>{% endif %}
+    <button type="submit" class="btn btn-danger" style="margin-top:10px;">Submit Resignation</button>
+    <a href="{% url 'employees:my_profile' %}" class="btn btn-outline" style="margin-top:10px;">Cancel</a>
+  </form>
+</div>
+{% endblock %}

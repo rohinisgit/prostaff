@@ -1,0 +1,85 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ emp_user.get_full_name|default:emp_user.username }}'s Payslips</h1>
+  <div>
+    <a href="{% url 'payroll:runs' %}" class="btn btn-outline btn-sm">&larr; Back to Payroll</a>
+    <a href="{% url 'payroll:edit_salary_structure' emp_user.id %}" class="btn btn-outline btn-sm">Edit Salary Structure</a>
+  </div>
+</div>
+
+{% if not has_salary_structure %}
+<div class="card">
+  <p class="empty-state">No salary structure set up for this employee yet. <a href="{% url 'payroll:edit_salary_structure' emp_user.id %}">Set one up</a> before crediting salary.</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <table>
+    <tr><th>Pay Period</th><th>Days Present</th><th>Hours</th><th>Gross</th><th>PF</th><th>Bonus</th><th>Net Pay</th><th>Status</th><th></th></tr>
+    {% for p in payslips %}
+    <tr>
+      <td>{{ p.payroll_run.start_date|date:"F Y" }}</td>
+      <td>{{ p.days_present }}</td>
+      <td>{{ p.total_hours_worked }}</td>
+      <td>Rs. {{ p.gross_pay }}</td>
+      <td>Rs. {{ p.pf_deduction }}</td>
+      <td>Rs. {{ p.bonus }}</td>
+      <td><strong>Rs. {{ p.net_pay }}</strong></td>
+      <td>
+        {% if p.is_released %}<span class="badge badge-success">Released</span>
+        {% else %}<span class="badge badge-warning">Not Released</span>{% endif %}
+      </td>
+      <td><a href="{% url 'payroll:download_payslip' p.id %}" class="btn btn-outline btn-sm">PDF</a></td>
+    </tr>
+    {% empty %}<tr><td colspan="9" class="empty-state">No payslips yet for this employee.</td></tr>{% endfor %}
+  </table>
+</div>
+
+{% if has_salary_structure and request.user.role == 'HR' %}
+<div class="card">
+  <h3>Credit Salary</h3>
+  <form method="post" action="{% url 'payroll:credit_salary' emp_user.id %}"
+        class="credit-form" data-credited="{{ credited_months }}"
+        style="display:flex; gap:10px; align-items:end;">
+    {% csrf_token %}
+    <div style="flex:1;">
+      <label>Month</label>
+      <select name="month" class="form-control credit-month-select">
+        {% for value, label in months %}
+        <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-accent credit-btn" style="margin-bottom:14px;">Credit Salary</button>
+    <span class="badge badge-success credit-done-badge" style="display:none; margin-bottom:14px;">Salary Credited</span>
+  </form>
+</div>
+
+<script>
+(function () {
+  var form = document.querySelector('.credit-form');
+  if (!form) return;
+  var select = form.querySelector('.credit-month-select');
+  var btn = form.querySelector('.credit-btn');
+  var badge = form.querySelector('.credit-done-badge');
+  var credited = (form.dataset.credited || '').split(',').filter(Boolean);
+
+  function updateState() {
+    if (credited.indexOf(select.value) !== -1) {
+      select.parentElement.style.display = 'none';
+      btn.style.display = 'none';
+      badge.style.display = 'inline-flex';
+    } else {
+      select.parentElement.style.display = '';
+      btn.style.display = '';
+      badge.style.display = 'none';
+    }
+  }
+
+  select.addEventListener('change', updateState);
+  updateState();
+})();
+</script>
+{% endif %}
+{% endblock %}

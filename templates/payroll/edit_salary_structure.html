@@ -1,0 +1,21 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>Salary Structure - {{ emp_user }}</h1></div>
+<div class="card">
+  {% if form.errors %}
+  <ul class="messages"><li class="error">Please fix the highlighted fields below.</li></ul>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>Basic</label>{{ form.basic }}{% if form.basic.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.basic.errors.0 }}</p>{% endif %}</div>
+      <div><label>HRA</label>{{ form.hra }}{% if form.hra.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.hra.errors.0 }}</p>{% endif %}</div>
+      <div><label>Other Allowances</label>{{ form.other_allowances }}{% if form.other_allowances.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.other_allowances.errors.0 }}</p>{% endif %}</div>
+      <div><label>Bonus (flat, monthly)</label>{{ form.bonus }}{% if form.bonus.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.bonus.errors.0 }}</p>{% endif %}</div>
+      <div><label>PF %</label>{{ form.pf_percent }}{% if form.pf_percent.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.pf_percent.errors.0 }}</p>{% endif %}</div>
+    </div>
+    <label><input type="checkbox" name="pf_applicable" {% if structure.pf_applicable %}checked{% endif %}> PF Applicable</label>
+    <button type="submit" class="btn btn-primary" style="margin-top:10px;">Save</button>
+  </form>
+</div>
+{% endblock %}
