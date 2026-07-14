@@ -4,7 +4,7 @@
   <h1>{{ emp_user.get_full_name|default:emp_user.username }}'s Payslips</h1>
   <div>
     <a href="{% url 'payroll:runs' %}" class="btn btn-outline btn-sm">&larr; Back to Payroll</a>
-    <a href="{% url 'payroll:edit_salary_structure' emp_user.id %}" class="btn btn-outline btn-sm">Edit Salary Structure</a>
+    <a href="{% url 'payroll:edit_salary_structure' emp_user.id %}?next={{ request.path|urlencode }}" class="btn btn-outline btn-sm">Edit Salary Structure</a>
   </div>
 </div>
 
@@ -35,24 +35,19 @@
     {% empty %}<tr><td colspan="9" class="empty-state">No payslips yet for this employee.</td></tr>{% endfor %}
   </table>
 </div>
-
 {% if has_salary_structure and request.user.role == 'HR' %}
-<div class="card">
-  <h3>Credit Salary</h3>
+<div style="display:flex; align-items:center; gap:10px; margin:16px 0;">
   <form method="post" action="{% url 'payroll:credit_salary' emp_user.id %}"
         class="credit-form" data-credited="{{ credited_months }}"
-        style="display:flex; gap:10px; align-items:end;">
+        style="display:flex; gap:10px; align-items:center; margin:0;">
     {% csrf_token %}
-    <div style="flex:1;">
-      <label>Month</label>
-      <select name="month" class="form-control credit-month-select">
-        {% for value, label in months %}
-        <option value="{{ value }}">{{ label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <button type="submit" class="btn btn-accent credit-btn" style="margin-bottom:14px;">Credit Salary</button>
-    <span class="badge badge-success credit-done-badge" style="display:none; margin-bottom:14px;">Salary Credited</span>
+    <select name="month" class="form-control credit-month-select" style="margin-bottom:0; width:auto;">
+      {% for value, label in months %}
+      <option value="{{ value }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-accent btn-sm credit-btn">Credit Salary</button>
+    <span class="badge badge-success credit-done-badge" style="display:none;">Salary Credited</span>
   </form>
 </div>
 
@@ -67,11 +62,11 @@
 
   function updateState() {
     if (credited.indexOf(select.value) !== -1) {
-      select.parentElement.style.display = 'none';
+      select.style.display = 'none';
       btn.style.display = 'none';
       badge.style.display = 'inline-flex';
     } else {
-      select.parentElement.style.display = '';
+      select.style.display = '';
       btn.style.display = '';
       badge.style.display = 'none';
     }

@@ -5,10 +5,12 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
-from django.http import FileResponse
+from django.http import FileResponse, JsonResponse
+from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from core.decorators import hr_or_admin_required, hr_only_required
-from core.models import User
+from core.models import User, Department
 from payroll.models import PayrollRun, Payslip, SalaryStructure
 from payroll.forms import SalaryStructureForm
 from payroll.utils import compute_payslip_for_user, generate_payslip_pdf
@@ -55,22 +57,28 @@ def download_payslip(request, payslip_id):
         messages.error(request, "This payslip hasn't been released yet.")
         return redirect('payroll:my_payslips')
 
-    if not payslip.pdf_file:
+    # The DB can have a pdf_file name recorded even if the actual file is
+    # missing from disk (moved media folder, manual deletion, failed write,
+    # etc). Check real existence, not just whether the field is set.
+    if not payslip.pdf_file or not payslip.pdf_file.storage.exists(payslip.pdf_file.name):
         generate_payslip_pdf(payslip)
+        payslip.refresh_from_db()
+
     return FileResponse(payslip.pdf_file.open('rb'), as_attachment=True, filename=payslip.pdf_file.name)
 
 
 @hr_or_admin_required
 def payroll_runs(request):
-    role_order = ['ADMIN', 'MANAGER', 'EMPLOYEE', 'HR']
-    role_labels = {'ADMIN': 'Admin', 'MANAGER': 'Managers', 'EMPLOYEE': 'Employees', 'HR': 'HR'}
+    """Ordering: Admin, then HR, then per-department (manager followed by
+    that department's employees, departments alphabetical), then anyone
+    left over. This base hierarchy stays fixed — the template only ever
+    re-sorts *within* it, pushing already-credited rows after
+    not-yet-credited ones for the selected month."""
+    role_labels = {'ADMIN': 'Admin', 'MANAGER': 'Manager', 'EMPLOYEE': 'Employee', 'HR': 'HR'}
 
     all_users = User.objects.exclude(id=request.user.id).select_related('department')
     months = _recent_months(timezone.localdate())
 
-    # Build a map of user_id -> set of "YYYY-MM" month keys that already have
-    # a released (credited) payslip, so the template can swap the
-    # "Credit Salary" button for a green "Salary Credited" badge per month.
     released_payslips = Payslip.objects.filter(
         is_released=True, user__in=all_users
     ).select_related('payroll_run')
@@ -79,21 +87,58 @@ def payroll_runs(request):
         key = p.payroll_run.start_date.strftime('%Y-%m')
         credited_map.setdefault(p.user_id, set()).add(key)
 
-    sections = []
-    for role in role_order:
-        role_employees = all_users.filter(role=role).order_by('first_name', 'username')
-        if not role_employees.exists():
-            continue
-        employees_list = [
-            {
-                'user': emp,
-                'credited_months': ','.join(sorted(credited_map.get(emp.id, set()))),
-            }
-            for emp in role_employees
-        ]
-        sections.append({'role': role, 'role_label': role_labels[role], 'employees': employees_list})
+    structure_user_ids = set(
+        SalaryStructure.objects.filter(user__in=all_users).values_list('user_id', flat=True)
+    )
 
-    return render(request, 'payroll/runs.html', {'sections': sections, 'months': months})
+    def _employee_dict(emp):
+        return {
+            'user': emp,
+            'role': emp.role,
+            'role_label': role_labels.get(emp.role, emp.get_role_display()),
+            'credited_months': ','.join(sorted(credited_map.get(emp.id, set()))),
+            'has_salary_structure': emp.id in structure_user_ids,
+        }
+
+    ordered_employees = []
+    seen_ids = set()
+
+    admins = all_users.filter(role='ADMIN').order_by('first_name', 'username')
+    for u in admins:
+        ordered_employees.append(_employee_dict(u))
+        seen_ids.add(u.id)
+
+    hr_users = all_users.filter(role='HR').order_by('first_name', 'username')
+    for u in hr_users:
+        ordered_employees.append(_employee_dict(u))
+        seen_ids.add(u.id)
+
+    for dept in Department.objects.order_by('name'):
+        dept_people = []
+        if dept.manager_id and dept.manager_id != request.user.id and dept.manager_id not in seen_ids:
+            dept_people.append(dept.manager)
+            seen_ids.add(dept.manager_id)
+
+        dept_employees = all_users.filter(department=dept, role='EMPLOYEE').exclude(
+            id__in=seen_ids
+        ).order_by('first_name', 'username')
+        for emp in dept_employees:
+            dept_people.append(emp)
+            seen_ids.add(emp.id)
+
+        other_managers = all_users.filter(department=dept, role='MANAGER').exclude(
+            id__in=seen_ids
+        ).order_by('first_name', 'username')
+        for m in other_managers:
+            dept_people.append(m)
+            seen_ids.add(m.id)
+
+        ordered_employees.extend(_employee_dict(u) for u in dept_people)
+
+    remaining = all_users.exclude(id__in=seen_ids).order_by('first_name', 'username')
+    ordered_employees.extend(_employee_dict(u) for u in remaining)
+
+    return render(request, 'payroll/runs.html', {'employees': ordered_employees, 'months': months})
 
 
 @hr_or_admin_required
@@ -117,6 +162,7 @@ def employee_payroll_history(request, user_id):
 @hr_only_required
 def credit_salary(request, user_id):
     emp_user = get_object_or_404(User, id=user_id)
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     if request.method == 'POST':
         month_value = request.POST.get('month', '')
@@ -124,11 +170,20 @@ def credit_salary(request, user_id):
             year, month = (int(part) for part in month_value.split('-'))
             start_date, end_date = _month_bounds(year, month)
         except (ValueError, AttributeError):
-            messages.error(request, "Please select a valid month.")
+            msg = "Please select a valid month."
+            if is_ajax:
+                return JsonResponse({'success': False, 'reason': 'invalid_month', 'error': msg}, status=400)
+            messages.error(request, msg)
             return redirect('payroll:employee_payroll_history', user_id=emp_user.id)
 
         if not SalaryStructure.objects.filter(user=emp_user).exists():
-            messages.error(request, f"{emp_user} has no salary structure set up. Set one up first.")
+            msg = f"{emp_user} has no salary structure set up. Set one up first."
+            if is_ajax:
+                return JsonResponse({
+                    'success': False, 'reason': 'no_structure', 'error': msg,
+                    'user_id': emp_user.id, 'user_name': str(emp_user),
+                }, status=400)
+            messages.error(request, msg)
             return redirect('payroll:employee_payroll_history', user_id=emp_user.id)
 
         run, _ = PayrollRun.objects.get_or_create(
@@ -136,7 +191,10 @@ def credit_salary(request, user_id):
         )
         payslip = compute_payslip_for_user(emp_user, run)
         if not payslip:
-            messages.error(request, f"Could not generate a payslip for {emp_user}.")
+            msg = f"Could not generate a payslip for {emp_user}."
+            if is_ajax:
+                return JsonResponse({'success': False, 'reason': 'generation_failed', 'error': msg}, status=400)
+            messages.error(request, msg)
             return redirect('payroll:employee_payroll_history', user_id=emp_user.id)
 
         payslip.is_released = True
@@ -145,8 +203,16 @@ def credit_salary(request, user_id):
         payslip.save()
         generate_payslip_pdf(payslip)
 
-        messages.success(request, f"Salary credited to {emp_user} for {start_date.strftime('%B %Y')}.")
+        msg = f"Salary credited to {emp_user} for {start_date.strftime('%B %Y')}."
+        if is_ajax:
+            return JsonResponse({
+                'success': True, 'message': msg,
+                'user_id': emp_user.id, 'month': month_value,
+            })
+        messages.success(request, msg)
 
+    if is_ajax:
+        return JsonResponse({'success': False, 'error': 'Invalid request.'}, status=400)
     return redirect('payroll:employee_payroll_history', user_id=emp_user.id)
 
 
@@ -160,12 +226,20 @@ def salary_structures(request):
 def edit_salary_structure(request, user_id):
     emp_user = get_object_or_404(User, id=user_id)
     structure, _ = SalaryStructure.objects.get_or_create(user=emp_user, defaults={'basic': 0})
+
+    next_url = request.POST.get('next') or request.GET.get('next') or ''
+    if next_url and not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+        next_url = ''
+
     if request.method == 'POST':
         form = SalaryStructureForm(request.POST, instance=structure)
         if form.is_valid():
             form.save()
             messages.success(request, 'Salary structure saved.')
-            return redirect('payroll:salary_structures')
+            return redirect(next_url or reverse('payroll:salary_structures'))
     else:
         form = SalaryStructureForm(instance=structure)
-    return render(request, 'payroll/edit_salary_structure.html', {'emp_user': emp_user, 'structure': structure, 'form': form})
+
+    return render(request, 'payroll/edit_salary_structure.html', {
+        'emp_user': emp_user, 'structure': structure, 'form': form, 'next_url': next_url,
+    })

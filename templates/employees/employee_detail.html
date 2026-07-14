@@ -4,7 +4,7 @@
   <h1>{{ emp_user.get_full_name|default:emp_user.username }}</h1>
   <div>
     <a href="{% url 'attendance:employee_attendance' emp_user.id %}" class="btn btn-outline btn-sm">Attendance</a>
-    <a href="{% url 'payroll:edit_salary_structure' emp_user.id %}" class="btn btn-outline btn-sm">Salary</a>
+    <a href="{% url 'payroll:edit_salary_structure' emp_user.id %}?next={{ request.path|urlencode }}" class="btn btn-outline btn-sm">Salary</a>
     {% if profile.status == 'ONBOARDING' and request.user.role == 'HR' %}
     <form method="post" action="{% url 'employees:complete_onboarding' emp_user.id %}" style="display:inline;">
       {% csrf_token %}

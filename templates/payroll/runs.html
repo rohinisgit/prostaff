@@ -1,69 +1,397 @@
 {% extends 'core/base.html' %}
 {% block content %}
-<div class="page-header"><h1>Payroll Runs</h1></div>
-
-{% for section in sections %}
-<div class="dir-section">
-  <div class="dir-section-header dir-role-{{ section.role|lower }}">
-    <span class="dir-role-name">{{ section.role_label }}</span>
-    <span class="dir-role-count">{{ section.employees|length }} {% if section.employees|length == 1 %}person{% else %}people{% endif %}</span>
-  </div>
-  <div class="card">
-    <table>
-      <tr><th>Employee</th><th>Department</th><th>Credit Salary</th><th></th></tr>
-      {% for item in section.employees %}
-      <tr>
-        <td>{{ item.user.get_full_name|default:item.user.username }}</td>
-        <td>{{ item.user.department|default:"-" }}</td>
-        <td>
-          {% if request.user.role == 'HR' %}
-          <form method="post" action="{% url 'payroll:credit_salary' item.user.id %}"
-                class="credit-form" data-credited="{{ item.credited_months }}"
-                style="display:flex; gap:8px; align-items:center; margin-bottom:0;">
-            {% csrf_token %}
-            <select name="month" class="form-control credit-month-select" style="margin-bottom:0; width:auto;">
-              {% for value, label in months %}
-              <option value="{{ value }}">{{ label }}</option>
-              {% endfor %}
-            </select>
-            <button type="submit" class="btn btn-accent btn-sm credit-btn">Credit Salary</button>
-            <span class="badge badge-success credit-done-badge" style="display:none;">Salary Credited</span>
-          </form>
-          {% else %}
-          <span class="badge badge-info">View only</span>
-          {% endif %}
-        </td>
-        <td><a href="{% url 'payroll:employee_payroll_history' item.user.id %}" class="btn btn-outline btn-sm">View Slips</a></td>
-      </tr>
-      {% endfor %}
-    </table>
+<div class="page-header">
+  <div>
+    <h1>Payroll Runs</h1>
+    <p>Filter, search and credit salaries across the organization.</p>
   </div>
 </div>
-{% empty %}
-<div class="card"><p class="empty-state">No employees found.</p></div>
-{% endfor %}
+
+<div style="display:none">{% csrf_token %}</div>
+
+<div class="card payroll-toolbar">
+  <div class="payroll-toolbar-row">
+    <div class="toolbar-field">
+      <label>Pay Period</label>
+      <select id="pf-month" class="form-control">
+        {% for value, label in months %}
+        <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="toolbar-field">
+      <label>Department</label>
+      <select id="pf-department" class="form-control">
+        <option value="">All Departments</option>
+      </select>
+    </div>
+    <div class="toolbar-field">
+      <label>Role</label>
+      <select id="pf-role" class="form-control">
+        <option value="">All Roles</option>
+        <option value="ADMIN">Admin</option>
+        <option value="HR">HR</option>
+        <option value="MANAGER">Manager</option>
+        <option value="EMPLOYEE">Employee</option>
+      </select>
+    </div>
+    <div class="toolbar-field">
+      <label>Status</label>
+      <select id="pf-status" class="form-control">
+        <option value="">All Statuses</option>
+        <option value="credited">Salary Credited</option>
+        <option value="not_credited">Not Credited</option>
+      </select>
+    </div>
+  </div>
+  <div class="payroll-toolbar-row">
+    <div class="toolbar-field toolbar-search">
+      <label>Search Employee</label>
+      <input type="text" id="pf-search" class="form-control" placeholder="Search by name...">
+    </div>
+  </div>
+</div>
+
+<div class="card" id="structure-warning" style="display:none; border-left:4px solid var(--sunset-orange); background:#FFF7F2; margin-bottom:16px;">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+    <p style="margin:0; font-size:0.85rem;" id="structure-warning-text"></p>
+    <button type="button" onclick="document.getElementById('structure-warning').style.display='none'"
+      style="background:none; border:none; cursor:pointer; font-weight:700; color:var(--grey-500);">&times;</button>
+  </div>
+</div>
+
+<div class="card" id="action-toast" style="display:none; border-left:4px solid #1D9A55; background:#E5F7EC; margin-bottom:16px;">
+  <p style="margin:0; font-size:0.85rem; color:#1D9A55;" id="action-toast-text"></p>
+</div>
+
+{% if request.user.role == 'HR' %}
+<div class="card payroll-bulkbar" id="bulk-bar" style="display:none;">
+  <span id="bulk-count">0 employees selected</span>
+  <button type="button" class="btn btn-primary btn-sm" id="bulk-credit-btn">Credit Salary for Selected</button>
+</div>
+{% endif %}
+
+<p class="payroll-results-count" id="results-count"></p>
+
+<div class="card payroll-table-card">
+  <table class="payroll-table">
+    <thead>
+      <tr>
+        {% if request.user.role == 'HR' %}
+        <th style="width:40px;"></th>
+        {% endif %}
+        <th>Employee</th>
+        <th>Department</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th style="text-align:right;">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="payroll-tbody">
+      {% for item in employees %}
+      <tr class="payroll-row"
+          data-name="{{ item.user.get_full_name|default:item.user.username }}"
+          data-department="{{ item.user.department|default:'' }}"
+          data-role="{{ item.role }}"
+          data-credited="{{ item.credited_months }}"
+          data-has-structure="{% if item.has_salary_structure %}1{% else %}0{% endif %}"
+          data-is-credited="0"
+          data-user-id="{{ item.user.id }}">
+        {% if request.user.role == 'HR' %}
+        <td><input type="checkbox" class="row-check" title="Select for bulk credit"></td>
+        {% endif %}
+        <td>
+          <div class="emp-cell">
+            <span class="emp-name">{{ item.user.get_full_name|default:item.user.username }}</span>
+            <span class="emp-id">ID: {{ item.user.employee_id|default:"-" }}</span>
+          </div>
+        </td>
+        <td>{{ item.user.department|default:"No Department" }}</td>
+        <td>{{ item.role_label }}</td>
+        <td>
+          <div class="status-cell">
+            <span class="badge badge-credit-blue status-badge-credited" style="display:none;">Salary Credited</span>
+            <span class="badge badge-warning status-badge-pending">Not Credited</span>
+            {% if request.user.role == 'HR' %}
+            <button type="button" class="btn btn-accent btn-sm credit-action-btn">Credit Salary</button>
+            {% endif %}
+          </div>
+        </td>
+        <td class="payroll-actions-cell">
+          {% if request.user.role != 'HR' %}<span class="badge badge-info">View only</span>{% endif %}
+          <a href="{% url 'payroll:employee_payroll_history' item.user.id %}" class="btn btn-outline btn-sm">View Slips</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="empty-state">No employees found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="empty-state" id="no-results-msg" style="display:none;">No employees match your filters.</p>
+</div>
+
+<style>
+  .row-check {
+    opacity: 0;
+    transition: opacity 0.15s;
+    cursor: pointer;
+  }
+  .payroll-row:hover .row-check {
+    opacity: 1;
+  }
+  .row-check:checked {
+    opacity: 1;
+  }
+  .row-check.is-credited {
+    display: none !important;
+  }
+</style>
 
 <script>
-document.querySelectorAll('.credit-form').forEach(function (form) {
-  var select = form.querySelector('.credit-month-select');
-  var btn = form.querySelector('.credit-btn');
-  var badge = form.querySelector('.credit-done-badge');
-  var credited = (form.dataset.credited || '').split(',').filter(Boolean);
+(function () {
+  var rows = Array.prototype.slice.call(document.querySelectorAll('.payroll-row'));
+  if (rows.length === 0) return;
 
-  function updateState() {
-    if (credited.indexOf(select.value) !== -1) {
-      select.style.display = 'none';
-      btn.style.display = 'none';
-      badge.style.display = 'inline-flex';
+  var isHR = {% if request.user.role == 'HR' %}true{% else %}false{% endif %};
+  var csrfToken = document.querySelector('input[name=csrfmiddlewaretoken]').value;
+  var creditUrlTemplate = "{% url 'payroll:credit_salary' 999999 %}".replace('999999', '__ID__');
+
+  var monthSelect = document.getElementById('pf-month');
+  var deptSelect = document.getElementById('pf-department');
+  var roleSelect = document.getElementById('pf-role');
+  var statusSelect = document.getElementById('pf-status');
+  var searchInput = document.getElementById('pf-search');
+  var noResultsMsg = document.getElementById('no-results-msg');
+  var resultsCount = document.getElementById('results-count');
+  var bulkBar = document.getElementById('bulk-bar');
+  var bulkCount = document.getElementById('bulk-count');
+  var bulkBtn = document.getElementById('bulk-credit-btn');
+  var tbody = document.getElementById('payroll-tbody');
+  var structureWarning = document.getElementById('structure-warning');
+  var structureWarningText = document.getElementById('structure-warning-text');
+  var actionToast = document.getElementById('action-toast');
+  var actionToastText = document.getElementById('action-toast-text');
+
+  // Build the Department filter from what's actually rendered on the page.
+  var seenDepts = {};
+  rows.forEach(function (row) { seenDepts[row.dataset.department || ''] = true; });
+  Object.keys(seenDepts).sort(function (a, b) {
+    if (a === '') return -1;
+    if (b === '') return 1;
+    return a.localeCompare(b);
+  }).forEach(function (d) {
+    var opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = d === '' ? 'No Department' : d;
+    deptSelect.appendChild(opt);
+  });
+
+  function isCreditedForMonth(row, month) {
+    var credited = (row.dataset.credited || '').split(',').filter(Boolean);
+    return credited.indexOf(month) !== -1;
+  }
+
+  function updateRowStatus(row) {
+    var month = monthSelect.value;
+    var credited = isCreditedForMonth(row, month);
+    var creditedBadge = row.querySelector('.status-badge-credited');
+    var pendingBadge = row.querySelector('.status-badge-pending');
+    var creditBtn = row.querySelector('.credit-action-btn');
+    var checkbox = row.querySelector('.row-check');
+
+    creditedBadge.style.display = credited ? 'inline-flex' : 'none';
+    pendingBadge.style.display = credited ? 'none' : 'inline-flex';
+    if (creditBtn) creditBtn.style.display = credited ? 'none' : 'inline-flex';
+
+    if (checkbox) {
+      if (credited) {
+        checkbox.checked = false;
+        checkbox.classList.add('is-credited');
+      } else {
+        checkbox.classList.remove('is-credited');
+      }
+    }
+
+    row.dataset.isCredited = credited ? '1' : '0';
+  }
+
+  function resortRows() {
+    // Stable sort: only moves already-credited rows after not-yet-credited
+    // ones. Relative order within each group stays exactly as rendered
+    // (Admin -> HR -> per-department manager+employees -> leftover).
+    var sorted = rows.slice().sort(function (a, b) {
+      return (a.dataset.isCredited === '1' ? 1 : 0) - (b.dataset.isCredited === '1' ? 1 : 0);
+    });
+    sorted.forEach(function (row) { tbody.appendChild(row); });
+  }
+
+  function applyFilters() {
+    rows.forEach(updateRowStatus);
+    resortRows();
+
+    var dept = deptSelect.value;
+    var role = roleSelect.value;
+    var status = statusSelect.value;
+    var search = searchInput.value.trim().toLowerCase();
+    var visibleCount = 0;
+
+    rows.forEach(function (row) {
+      var matchesDept = !dept || (row.dataset.department || '') === dept;
+      var matchesRole = !role || row.dataset.role === role;
+      var matchesStatus = !status ||
+        (status === 'credited' && row.dataset.isCredited === '1') ||
+        (status === 'not_credited' && row.dataset.isCredited === '0');
+      var matchesSearch = !search || row.dataset.name.toLowerCase().indexOf(search) !== -1;
+
+      var visible = matchesDept && matchesRole && matchesStatus && matchesSearch;
+      row.style.display = visible ? '' : 'none';
+      if (visible) visibleCount++;
+    });
+
+    noResultsMsg.style.display = (visibleCount === 0) ? '' : 'none';
+    resultsCount.textContent = 'Showing ' + visibleCount + ' of ' + rows.length + ' employees';
+    if (isHR) updateBulkBar();
+  }
+
+  function eligibleCheckedRows() {
+    return rows.filter(function (row) {
+      var box = row.querySelector('.row-check');
+      return row.style.display !== 'none' && row.dataset.isCredited !== '1' && box && box.checked;
+    });
+  }
+
+  function updateBulkBar() {
+    var checked = eligibleCheckedRows();
+    if (checked.length > 0) {
+      bulkBar.style.display = 'flex';
+      bulkCount.textContent = checked.length + (checked.length === 1 ? ' employee selected' : ' employees selected');
     } else {
-      select.style.display = '';
-      btn.style.display = '';
-      badge.style.display = 'none';
+      bulkBar.style.display = 'none';
     }
   }
 
-  select.addEventListener('change', updateState);
-  updateState();
-});
+  function showStructureWarning(names) {
+    structureWarningText.textContent = 'Salary structure not set up yet for: ' + names.join(', ') +
+      '. Set up their structure first — their salary was not credited.';
+    structureWarning.style.display = 'block';
+  }
+
+  function showToast(text) {
+    actionToastText.textContent = text;
+    actionToast.style.display = 'block';
+    setTimeout(function () { actionToast.style.display = 'none'; }, 4000);
+  }
+
+  function creditSalary(userId, month) {
+    var url = creditUrlTemplate.replace('__ID__', userId);
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrfToken,
+      },
+      body: new URLSearchParams({ month: month }),
+    }).then(function (resp) { return resp.json(); });
+  }
+
+  // ---------- Individual credit ----------
+  rows.forEach(function (row) {
+    var btn = row.querySelector('.credit-action-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      if (row.dataset.hasStructure === '0') {
+        showStructureWarning([row.dataset.name]);
+        return;
+      }
+      var month = monthSelect.value;
+      btn.disabled = true;
+      btn.textContent = 'Crediting...';
+      creditSalary(row.dataset.userId, month).then(function (data) {
+        btn.disabled = false;
+        btn.textContent = 'Credit Salary';
+        if (data.success) {
+          var current = (row.dataset.credited || '').split(',').filter(Boolean);
+          if (current.indexOf(data.month) === -1) current.push(data.month);
+          row.dataset.credited = current.join(',');
+          applyFilters();
+          showToast(data.message);
+        } else if (data.reason === 'no_structure') {
+          showStructureWarning([row.dataset.name]);
+        } else {
+          alert(data.error || 'Could not credit salary.');
+        }
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = 'Credit Salary';
+        alert('Something went wrong. Please try again.');
+      });
+    });
+  });
+
+  if (isHR) {
+    rows.forEach(function (row) {
+      var box = row.querySelector('.row-check');
+      if (box) box.addEventListener('change', updateBulkBar);
+    });
+
+    bulkBtn.addEventListener('click', function () {
+      var checkedRows = eligibleCheckedRows();
+      if (checkedRows.length === 0) {
+        alert('No eligible employees selected to credit.');
+        return;
+      }
+
+      var withStructure = checkedRows.filter(function (r) { return r.dataset.hasStructure === '1'; });
+      var withoutStructure = checkedRows.filter(function (r) { return r.dataset.hasStructure === '0'; });
+
+      if (withoutStructure.length > 0) {
+        showStructureWarning(withoutStructure.map(function (r) { return r.dataset.name; }));
+      } else {
+        structureWarning.style.display = 'none';
+      }
+
+      if (withStructure.length === 0) return;
+
+      var month = monthSelect.value;
+      bulkBtn.disabled = true;
+      bulkBtn.textContent = 'Crediting...';
+
+      Promise.all(withStructure.map(function (row) {
+        return creditSalary(row.dataset.userId, month).then(function (data) {
+          if (data.success) {
+            var current = (row.dataset.credited || '').split(',').filter(Boolean);
+            if (current.indexOf(data.month) === -1) current.push(data.month);
+            row.dataset.credited = current.join(',');
+          }
+          return data;
+        });
+      })).then(function (results) {
+        bulkBtn.disabled = false;
+        bulkBtn.textContent = 'Credit Salary for Selected';
+        applyFilters();
+        var succeeded = results.filter(function (r) { return r.success; }).length;
+        if (succeeded > 0) {
+          showToast('Salary credited for ' + succeeded + (succeeded === 1 ? ' employee.' : ' employees.'));
+        }
+        var failedNoStructure = results.filter(function (r) { return !r.success && r.reason === 'no_structure'; });
+        if (failedNoStructure.length > 0) {
+          showStructureWarning(failedNoStructure.map(function (r) { return r.user_name; }));
+        }
+      }).catch(function () {
+        bulkBtn.disabled = false;
+        bulkBtn.textContent = 'Credit Salary for Selected';
+        alert('Something went wrong crediting the selected salaries. Please try again.');
+      });
+    });
+  }
+
+  monthSelect.addEventListener('change', applyFilters);
+  deptSelect.addEventListener('change', applyFilters);
+  roleSelect.addEventListener('change', applyFilters);
+  statusSelect.addEventListener('change', applyFilters);
+  searchInput.addEventListener('input', applyFilters);
+
+  applyFilters();
+})();
 </script>
 {% endblock %}
