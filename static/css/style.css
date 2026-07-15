@@ -213,14 +213,6 @@ tr:hover td { background: var(--grey-50); }
   .nav-dropdown:hover .nav-dropdown-menu { display: block; }
 }
 
-.user-name-wrap { position: relative; display: inline-block; }
-.notif-badge {
-  position: absolute; top: -12px; right: -6px;
-  background: var(--sunset-orange); color: var(--white);
-  font-size: 0.65rem; font-weight: 700; min-width: 16px; height: 16px;
-  border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  padding: 0 3px; line-height: 1;
-}
 /* ---------- Sidebar Layout ---------- */
 .app-shell { display: flex; min-height: 100vh; }
 
@@ -232,7 +224,6 @@ tr:hover td { background: var(--grey-50); }
   flex-direction: column;
   position: fixed;
   top: 0; left: 0; bottom: 0;
-  overflow-y: auto;
   z-index: 150;
 }
 
@@ -249,7 +240,7 @@ tr:hover td { background: var(--grey-50); }
 .sidebar-logo-text { font-weight: 700; font-size: 1.15rem; color: var(--black); }
 .sidebar-logo-text span { color: var(--electric-blue); }
 
-.sidebar-menu { flex: 1; padding: 6px 10px; }
+.sidebar-menu { flex: 1; padding: 6px 10px; overflow-y: auto; min-height: 0; }
 
 .sidebar-section {
   padding: 14px 12px 6px;
@@ -277,15 +268,42 @@ tr:hover td { background: var(--grey-50); }
 
 .sidebar-footer {
   border-top: 1px solid var(--grey-100);
-  padding: 16px 18px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  flex-shrink: 0;
 }
-.sidebar-user { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.88rem; }
+
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
 .sidebar-user .notif-badge { position: static; margin-left: auto; }
-.sidebar-logout-form { margin: 0; }
-.sidebar-logout-form .btn { width: 100%; justify-content: center; }
+
+.sidebar-logout-form {
+  margin: 0;
+  width: 100%;
+}
+.sidebar-logout-form .btn {
+  background: #E4483A;
+  color: var(--white);
+  border: none;
+  width:100%;
+  justify-content: center;
+  padding:11px 11px;
+  font-size:0.92rem;
+  margin-top:10px;
+}
+.sidebar-logout-form .btn:hover {
+  background: #C93B2F;
+  color: var(--white);
+  
+}
 
 .main-content { margin-left: 240px; width: 100%; }
 
@@ -371,6 +389,7 @@ tr:hover td { background: var(--grey-50); }
 .modal-box .modal-icon { font-size: 2.4rem; margin-bottom: 10px; }
 .modal-box h3 { margin: 0 0 8px; }
 .modal-box p { color: var(--grey-700); margin: 0 0 20px; }
+
 /* ---------- Payroll Runs: toolbar, filters, table ---------- */
 .payroll-toolbar { margin-bottom: 16px; }
 .payroll-toolbar-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
@@ -427,4 +446,60 @@ tr:hover td { background: var(--grey-50); }
 @media (max-width: 900px) {
   .payroll-table-card { overflow-x: auto; }
   .payroll-table { min-width: 720px; }
+}
+
+/* ---------- Compact approval action buttons ---------- */
+.approval-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  transition: filter 0.15s, transform 0.05s;
+  flex-shrink: 0;
+}
+.btn-action:active { transform: translateY(1px); }
+
+.btn-action-approve { background: #E5F7EC; color: #1D9A55; }
+.btn-action-approve:hover { background: #1D9A55; color: var(--white); }
+
+.btn-action-reject { background: #FDEAE8; color: #E4483A; }
+.btn-action-reject:hover { background: #E4483A; color: var(--white); }
+
+.text-muted { color: var(--grey-500); font-size: 0.85rem; }
+
+/* Status cell: keep badge + meta text from crowding the actions column */
+.payroll-table td .badge,
+table td .badge {
+  display: inline-block;
+  white-space: nowrap;
+}
+table th:last-child, table td:last-child {
+  width: 90px;
+  text-align: right;
+}
+
+/* ---------- Sidebar tab badges (separate from unread-message badge) ---------- */
+.sidebar-badge {
+  margin-left: auto;
+  background: var(--sunset-orange);
+  color: var(--white);
+  font-size: 0.68rem;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  line-height: 1;
+  flex-shrink: 0;
 }

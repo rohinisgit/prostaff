@@ -7,4 +7,5 @@ urlpatterns = [
     path('me/', views.my_leaves, name='my_leaves'),
     path('approvals/', views.leave_approvals, name='approvals'),
     path('<int:leave_id>/<str:decision>/', views.review_leave, name='review_leave'),
+    path('notifications/', views.notifications, name='notifications'),
 ]
