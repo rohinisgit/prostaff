@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -46,5 +48,18 @@ def attendance_reports(request):
 @hr_or_admin_required
 def employee_attendance(request, user_id):
     emp_user = get_object_or_404(User, id=user_id)
+    period = request.GET.get('period', 'weekly')
+    today = timezone.localdate()
+
     records = AttendanceRecord.objects.filter(user=emp_user)
-    return render(request, 'attendance/employee_attendance.html', {'emp_user': emp_user, 'records': records})
+    if period == 'monthly':
+        records = records.filter(date__gte=today - timedelta(days=30))
+    elif period == 'yearly':
+        records = records.filter(date__gte=today - timedelta(days=365))
+    else:
+        period = 'weekly'
+        records = records.filter(date__gte=today - timedelta(days=7))
+
+    return render(request, 'attendance/employee_attendance.html', {
+        'emp_user': emp_user, 'records': records, 'period': period,
+    })

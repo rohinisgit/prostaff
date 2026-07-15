@@ -12,6 +12,8 @@ from employees.forms import (
     EmployeeSelfEditForm, NewEmployeeForm, HRDocumentForm, SelfDocumentForm,
     RoleChangeForm, ResignationRequestForm, HREmployeeEditForm,
 )
+from payroll.models import SalaryStructure
+from payroll.forms import SalaryStructureForm
 
 
 def _present_user_ids_today():
@@ -22,9 +24,20 @@ def _present_user_ids_today():
 
 
 def _can_apply_resignation(user):
-    """Employee, Manager and Admin may resign. HR reviews resignations for
-    everyone else, so this option isn't offered to HR itself."""
     return user.role in ('EMPLOYEE', 'MANAGER', 'ADMIN')
+
+
+def _department_sort_key(dept_name):
+    """Data Entry departments first, then Software, then everything else
+    alphabetically."""
+    lower = dept_name.lower()
+    if 'data entry' in lower:
+        priority = 0
+    elif 'software' in lower:
+        priority = 1
+    else:
+        priority = 2
+    return (priority, lower)
 
 
 @login_required
@@ -54,8 +67,6 @@ def my_profile(request):
 
 @login_required
 def upload_own_document(request):
-    """Self-service upload — Employee/Manager/Admin/HR uploading their own
-    personal documents. HR cannot use this to upload for someone else."""
     if request.method == 'POST':
         form = SelfDocumentForm(request.POST, request.FILES)
         if form.is_valid():
@@ -91,12 +102,6 @@ def apply_resignation(request):
         form = ResignationRequestForm()
 
     return render(request, 'employees/apply_resignation.html', {'form': form})
-
-
-@hr_or_admin_required
-def resignation_list(request):
-    resignations = ResignationRequest.objects.select_related('user').all()
-    return render(request, 'employees/resignation_list.html', {'resignations': resignations})
 
 
 @hr_or_admin_required
@@ -164,7 +169,6 @@ def negotiate_resignation(request, resignation_id):
 
 @login_required
 def accept_resignation_offer(request, resignation_id):
-    """Employee accepts HR's negotiation offer and stays."""
     resignation = get_object_or_404(ResignationRequest, id=resignation_id, user=request.user)
     if resignation.status != 'NEGOTIATING':
         messages.error(request, "There is no active offer to accept.")
@@ -178,7 +182,6 @@ def accept_resignation_offer(request, resignation_id):
 
 @login_required
 def quit_after_negotiation(request, resignation_id):
-    """Employee declines HR's offer and confirms they still want to quit."""
     resignation = get_object_or_404(ResignationRequest, id=resignation_id, user=request.user)
     if resignation.status != 'NEGOTIATING':
         messages.error(request, "There is no active offer to respond to.")
@@ -189,17 +192,18 @@ def quit_after_negotiation(request, resignation_id):
         messages.success(request, "Your response has been sent to HR. They'll confirm your notice period shortly.")
     return redirect('employees:my_profile')
 
-def _department_sort_key(dept_name):
-    """Data Entry departments first, then Software, then everything else
-    alphabetically."""
-    lower = dept_name.lower()
-    if 'data entry' in lower:
-        priority = 0
-    elif 'software' in lower:
-        priority = 1
+@hr_only_required
+def onboard_employee(request):
+    if request.method == 'POST':
+        form = NewEmployeeForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            EmployeeProfile.objects.create(user=user, status='ONBOARDING')
+            messages.success(request, f'{user} onboarded successfully. Share their login credentials securely.')
+            return redirect('employees:employee_detail', user_id=user.id)
     else:
-        priority = 2
-    return (priority, lower)
+        form = NewEmployeeForm()
+    return render(request, 'employees/onboard.html', {'form': form})
 
 
 @hr_or_admin_required
@@ -213,9 +217,10 @@ def employee_directory(request):
     if request.user.role == 'HR':
         employees = employees.exclude(role__in=['HR', 'ADMIN'])
 
-    # Employees still onboarding haven't actually joined yet — they only
-    # show up in "View Onboarding", not in the main directory.
-    employees = employees.exclude(profile__status='ONBOARDING')
+    # Onboarding employees are hidden by default — HR sees them only by
+    # explicitly filtering the Status dropdown to "Onboarding".
+    if status_filter != 'ONBOARDING':
+        employees = employees.exclude(profile__status='ONBOARDING')
 
     if query:
         employees = employees.filter(
@@ -232,7 +237,7 @@ def employee_directory(request):
 
     employees = list(employees)
 
-    base_qs = User.objects.exclude(id=request.user.id).exclude(profile__status='ONBOARDING')
+    base_qs = User.objects.exclude(id=request.user.id)
     if request.user.role == 'HR':
         base_qs = base_qs.exclude(role__in=['HR', 'ADMIN'])
     dept_qs = base_qs.select_related('department')
@@ -246,7 +251,12 @@ def employee_directory(request):
     employee_rows = []
     for emp in employees:
         profile = getattr(emp, 'profile', None)
-        emp_status = 'EXITED' if profile and profile.status == 'EXITED' else 'ACTIVE'
+        if profile and profile.status == 'ONBOARDING':
+            emp_status = 'ONBOARDING'
+        elif profile and profile.status == 'EXITED':
+            emp_status = 'EXITED'
+        else:
+            emp_status = 'ACTIVE'
         if status_filter and status_filter != emp_status:
             continue
         emp.display_status = emp_status
@@ -268,9 +278,8 @@ def employee_directory(request):
 
 @hr_or_admin_required
 def employee_detail(request, user_id):
-    """HR/Admin's view is now read-only for personal details — those are
-    self-managed by the employee. HR only manages: official document
-    uploads, role changes, and reviewing resignation status."""
+    """Read-only view. All editing (profile, status, role, salary,
+    documents) happens on the Edit page, reached via the button here."""
     emp_user = get_object_or_404(User, id=user_id)
 
     if request.user.role == 'HR' and emp_user.role == 'ADMIN':
@@ -279,37 +288,17 @@ def employee_detail(request, user_id):
 
     profile, _ = EmployeeProfile.objects.get_or_create(user=emp_user)
     documents = emp_user.documents.all()
-    doc_form = HRDocumentForm()
-    role_form = RoleChangeForm(instance=emp_user, acting_user=request.user)
     latest_resignation = ResignationRequest.objects.filter(user=emp_user).first()
+    salary_structure = SalaryStructure.objects.filter(user=emp_user).first()
 
     return render(request, 'employees/employee_detail.html', {
-        'emp_user': emp_user, 'profile': profile, 'documents': documents, 'doc_form': doc_form,
-        'role_form': role_form, 'latest_resignation': latest_resignation,
+        'emp_user': emp_user, 'profile': profile, 'documents': documents,
+        'latest_resignation': latest_resignation, 'salary_structure': salary_structure,
     })
-
-@hr_only_required
-def edit_employee_profile(request, user_id):
-    """HR edits an employee's core profile fields directly from the
-    directory's Edit button."""
-    emp_user = get_object_or_404(User, id=user_id)
-
-    if request.method == 'POST':
-        form = HREmployeeEditForm(request.POST, instance=emp_user)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f"{emp_user}'s profile has been updated.")
-            return redirect('employees:employee_detail', user_id=emp_user.id)
-    else:
-        form = HREmployeeEditForm(instance=emp_user)
-
-    return render(request, 'employees/edit_employee_profile.html', {'emp_user': emp_user, 'form': form})
 
 
 @hr_only_required
 def upload_document(request, user_id):
-    """HR uploads an official, company-issued document for the employee.
-    Personal documents are uploaded by each person themselves."""
     emp_user = get_object_or_404(User, id=user_id)
     if request.method == 'POST':
         form = HRDocumentForm(request.POST, request.FILES)
@@ -319,38 +308,71 @@ def upload_document(request, user_id):
             doc.uploaded_by = request.user
             doc.save()
             messages.success(request, 'Document uploaded.')
-    return redirect('employees:employee_detail', user_id=emp_user.id)
+    return redirect('employees:edit_employee_profile', user_id=emp_user.id)
 
 
 @hr_only_required
-def onboard_employee(request):
+def edit_employee_profile(request, user_id):
+    """Editable view — profile fields, status, role & access, salary, and
+    document uploads all live here."""
+    emp_user = get_object_or_404(User, id=user_id)
+
     if request.method == 'POST':
-        form = NewEmployeeForm(request.POST)
+        form = HREmployeeEditForm(request.POST, instance=emp_user)
         if form.is_valid():
-            user = form.save()
-            EmployeeProfile.objects.create(user=user, status='ONBOARDING')
-            messages.success(request, f'{user} onboarded successfully. Share their login credentials securely.')
-            return redirect('employees:employee_detail', user_id=user.id)
+            form.save()
+            messages.success(request, f"{emp_user}'s profile has been updated.")
+            return redirect('employees:edit_employee_profile', user_id=emp_user.id)
     else:
-        form = NewEmployeeForm()
-    return render(request, 'employees/onboard.html', {'form': form})
+        form = HREmployeeEditForm(instance=emp_user)
+
+    documents = emp_user.documents.all()
+    doc_form = HRDocumentForm()
+    role_form = RoleChangeForm(instance=emp_user, acting_user=request.user)
+    profile, _ = EmployeeProfile.objects.get_or_create(user=emp_user)
+    salary_structure, _ = SalaryStructure.objects.get_or_create(user=emp_user, defaults={'basic': 0})
+    salary_form = SalaryStructureForm(instance=salary_structure)
+
+    return render(request, 'employees/edit_employee_profile.html', {
+        'emp_user': emp_user, 'form': form,
+        'documents': documents, 'doc_form': doc_form, 'role_form': role_form,
+        'profile': profile, 'salary_form': salary_form,
+    })
 
 
-@hr_or_admin_required
-def onboarding_list(request):
-    today = timezone.localdate()
-    onboarding = EmployeeProfile.objects.filter(
-        status='ONBOARDING',
-        user__date_joined_company__gt=today,
-    ).select_related('user', 'user__department')
-    return render(request, 'employees/onboarding_list.html', {'onboarding': onboarding})
+@hr_only_required
+def update_employee_status(request, user_id):
+    """HR moves an employee between Onboarding, Active, and Exited
+    directly from the Edit page."""
+    emp_user = get_object_or_404(User, id=user_id)
+    profile, _ = EmployeeProfile.objects.get_or_create(user=emp_user)
+
+    if request.method == 'POST':
+        new_status = request.POST.get('status')
+        if new_status in ('ONBOARDING', 'ACTIVE', 'EXITED'):
+            profile.status = new_status
+            profile.save()
+            messages.success(request, f"{emp_user}'s status changed to {profile.get_status_display()}.")
+        else:
+            messages.error(request, "Invalid status selected.")
+    return redirect('employees:edit_employee_profile', user_id=emp_user.id)
+
+@hr_only_required
+def update_salary_structure(request, user_id):
+    emp_user = get_object_or_404(User, id=user_id)
+    structure, _ = SalaryStructure.objects.get_or_create(user=emp_user, defaults={'basic': 0})
+    if request.method == 'POST':
+        form = SalaryStructureForm(request.POST, instance=structure)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Salary structure saved.')
+        else:
+            messages.error(request, 'Please fix the highlighted salary fields.')
+    return redirect('employees:edit_employee_profile', user_id=emp_user.id)
 
 
 @hr_only_required
 def delete_employee(request, user_id):
-    """Delete is now only reachable once the employee's resignation has
-    been accepted (profile.status == 'EXITED') — never for an active
-    employee, regardless of how this URL is hit."""
     emp_user = get_object_or_404(User, id=user_id)
     if emp_user == request.user:
         messages.error(request, "You Cannot delete you own account")
@@ -378,13 +400,13 @@ def change_role(request, user_id):
         return redirect('employees:employee_detail', user_id=emp_user.id)
     if emp_user == request.user:
         messages.error(request, "You cannot change your own role.")
-        return redirect('employees:employee_detail', user_id=emp_user.id)
+        return redirect('employees:edit_employee_profile', user_id=emp_user.id)
     if emp_user.role == 'ADMIN':
         messages.error(request, "Admin accounts are top priority and their role cannot be changed.")
-        return redirect('employees:employee_detail', user_id=emp_user.id)
+        return redirect('employees:edit_employee_profile', user_id=emp_user.id)
     if request.user.role == 'HR' and emp_user.role in ('HR', 'ADMIN'):
         messages.error(request, "HR cannot change the role of an HR or Admin account.")
-        return redirect('employees:employee_detail', user_id=emp_user.id)
+        return redirect('employees:edit_employee_profile', user_id=emp_user.id)
 
     if request.method == 'POST':
         form = RoleChangeForm(request.POST, instance=emp_user, acting_user=request.user)
@@ -393,7 +415,7 @@ def change_role(request, user_id):
             messages.success(request, f"{emp_user}'s role changed to {emp_user.get_role_display()}.")
         else:
             messages.error(request, "Invalid role selection.")
-    return redirect('employees:employee_detail', user_id=emp_user.id)
+    return redirect('employees:edit_employee_profile', user_id=emp_user.id)
 
 
 @login_required
@@ -423,11 +445,7 @@ def team_member_detail(request, user_id):
     records = AttendanceRecord.objects.filter(user=emp_user)[:30]
 
     today = timezone.localdate()
-    is_onboarding = (
-        profile.status == 'ONBOARDING' and
-        emp_user.date_joined_company and
-        emp_user.date_joined_company > today
-    )
+    is_onboarding = profile.status == 'ONBOARDING'
     is_present_today = AttendanceRecord.objects.filter(
         user=emp_user, date=today, in_time__isnull=False
     ).exists()
@@ -436,14 +454,3 @@ def team_member_detail(request, user_id):
         'emp_user': emp_user, 'profile': profile, 'records': records,
         'is_onboarding': is_onboarding, 'is_present_today': is_present_today,
     })
-
-
-@hr_only_required
-def complete_onboarding(request, user_id):
-    emp_user = get_object_or_404(User, id=user_id)
-    profile, _ = EmployeeProfile.objects.get_or_create(user=emp_user)
-    if request.method == 'POST':
-        profile.status = 'ACTIVE'
-        profile.save()
-        messages.success(request, f"{emp_user} has completed onboarding and is now Active.")
-    return redirect('employees:employee_detail', user_id=emp_user.id)

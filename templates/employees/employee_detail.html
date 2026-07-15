@@ -1,56 +1,72 @@
 {% extends 'core/base.html' %}
 {% block content %}
 <div class="page-header">
-  <h1>{{ emp_user.get_full_name|default:emp_user.username }}</h1>
+  <div>
+    <a href="{% url 'employees:directory' %}" class="btn btn-outline btn-sm">&larr; Back to Directory</a>
+  </div>
   <div>
     <a href="{% url 'attendance:employee_attendance' emp_user.id %}" class="btn btn-outline btn-sm">Attendance</a>
-    <a href="{% url 'payroll:edit_salary_structure' emp_user.id %}?next={{ request.path|urlencode }}" class="btn btn-outline btn-sm">Salary</a>
-    {% if profile.status == 'ONBOARDING' and request.user.role == 'HR' %}
-    <form method="post" action="{% url 'employees:complete_onboarding' emp_user.id %}" style="display:inline;">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-accent btn-sm">Mark Onboarding Complete</button>
-    </form>
-    {% endif %}
     {% if profile.status == 'EXITED' and request.user.role == 'HR' %}
     <a href="{% url 'employees:delete_employee' emp_user.id %}" class="btn btn-danger btn-sm">Delete</a>
+    {% endif %}
+    {% if request.user.role == 'HR' %}
+    <a href="{% url 'employees:edit_employee_profile' emp_user.id %}" class="btn btn-accent btn-sm">Edit</a>
     {% endif %}
   </div>
 </div>
 
+<h1 style="margin:0 0 18px;">{{ emp_user.get_full_name|default:emp_user.username }}</h1>
+
 <div class="card">
   <h3>Profile</h3>
   <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px 24px;">
-    <div><label>Employee ID</label><p style="margin:0;">{{ emp_user.employee_id|default:"-" }}</p></div>
-    <div><label>Role</label><p style="margin:0;">{{ emp_user.get_role_display }}</p></div>
-    <div><label>Department</label><p style="margin:0;">{{ emp_user.department|default:"-" }}</p></div>
-    <div><label>Email</label><p style="margin:0;">{{ emp_user.email|default:"-" }}</p></div>
-    <div><label>Phone</label><p style="margin:0;">{% if emp_user.phone %}{{ emp_user.phone_country_code }} {{ emp_user.phone }}{% else %}-{% endif %}</p></div>
-    <div><label>Joined</label><p style="margin:0;">{{ emp_user.date_joined_company|default:"-" }}</p></div>
-    <div><label>Status</label>
+    <div><label style="font-weight:700;">Employee ID</label><p style="margin:0;">{{ emp_user.employee_id|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Role</label><p style="margin:0;">{{ emp_user.get_role_display }}</p></div>
+    <div><label style="font-weight:700;">Department</label><p style="margin:0;">{{ emp_user.department|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Email</label><p style="margin:0;">{{ emp_user.email|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Phone</label><p style="margin:0;">{% if emp_user.phone %}{{ emp_user.phone_country_code }} {{ emp_user.phone }}{% else %}-{% endif %}</p></div>
+    <div><label style="font-weight:700;">Joined</label><p style="margin:0;">{{ emp_user.date_joined_company|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Status</label>
       <p style="margin:0;">
         {% if profile.status == 'EXITED' %}<span class="badge badge-danger">Exited</span>
         {% elif profile.status == 'ONBOARDING' %}<span class="badge badge-warning">Onboarding</span>
-        {% else %}<span class="badge badge-success">Active</span>{% endif %}
+        {% else %}<span class="badge badge-info">Active</span>{% endif %}
       </p>
     </div>
   </div>
   <p style="color:var(--grey-500); font-size:0.8rem; margin:14px 0 0;">
-    Personal, banking and emergency contact details are managed by the employee themselves under My Profile.
+    This is a read-only view. Use the Edit button above to update profile details, status, role, salary, or documents.
   </p>
+</div>
+
+<div class="card">
+  <h3>Salary Details</h3>
+  {% if salary_structure %}
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px 24px;">
+    <div><label style="font-weight:700;">Basic</label><p style="margin:0;">Rs. {{ salary_structure.basic }}</p></div>
+    <div><label style="font-weight:700;">HRA</label><p style="margin:0;">Rs. {{ salary_structure.hra }}</p></div>
+    <div><label style="font-weight:700;">Other Allowances</label><p style="margin:0;">Rs. {{ salary_structure.other_allowances }}</p></div>
+    <div><label style="font-weight:700;">Bonus</label><p style="margin:0;">Rs. {{ salary_structure.bonus }}</p></div>
+    <div><label style="font-weight:700;">Gross</label><p style="margin:0;">Rs. {{ salary_structure.gross }}</p></div>
+    <div><label style="font-weight:700;">PF</label><p style="margin:0;">{% if salary_structure.pf_applicable %}{{ salary_structure.pf_percent }}%{% else %}Not Applicable{% endif %}</p></div>
+  </div>
+  {% else %}
+  <p class="empty-state">No salary structure set up yet. Use Edit to set one up.</p>
+  {% endif %}
 </div>
 
 {% if latest_resignation %}
 <div class="card">
   <h3>Resignation</h3>
   <div style="padding:12px 14px; background:var(--grey-50); border-radius:8px; margin-bottom:14px;">
-    <label style="margin:0 0 4px;">Reason</label>
+    <label style="margin:0 0 4px; font-weight:700;">Reason</label>
     <p style="margin:0;">{{ latest_resignation.reason }}</p>
   </div>
 
   {% if latest_resignation.status == 'ACCEPTED' %}
   <div style="display:flex; gap:32px; flex-wrap:wrap; margin-bottom:10px;">
-    <div><label style="margin:0 0 2px;">Notice Period</label><p style="margin:0; font-weight:600;">{{ latest_resignation.notice_period_days }} days</p></div>
-    <div><label style="margin:0 0 2px;">Exit Date</label><p style="margin:0; font-weight:600;">{{ latest_resignation.exit_date }}</p></div>
+    <div><label style="margin:0 0 2px; font-weight:700;">Notice Period</label><p style="margin:0; font-weight:600;">{{ latest_resignation.notice_period_days }} days</p></div>
+    <div><label style="margin:0 0 2px; font-weight:700;">Exit Date</label><p style="margin:0; font-weight:600;">{{ latest_resignation.exit_date }}</p></div>
   </div>
   {% endif %}
 
@@ -97,22 +113,6 @@
 </div>
 {% endif %}
 
-{% if emp_user.role != 'ADMIN' %}
-{% if request.user.role == 'ADMIN' or emp_user.role == 'EMPLOYEE' or emp_user.role == 'MANAGER' %}
-<div class="card">
-  <h3>Role & Access</h3>
-  <form method="post" action="{% url 'employees:change_role' emp_user.id %}" style="display:flex; gap:10px; align-items:end;">
-    {% csrf_token %}
-    <div style="flex:1;"><label>Role</label>{{ role_form.role }}</div>
-    <button type="submit" class="btn btn-accent" style="margin-bottom:14px;">Update Role</button>
-  </form>
-  {% if request.user.role == 'HR' %}
-  <p style="color:var(--grey-500); font-size:0.8rem; margin:0;">HR can only assign Employee or Manager. Contact Admin to grant HR/Admin access.</p>
-  {% endif %}
-</div>
-{% endif %}
-{% endif %}
-
 <div class="card">
   <h3>Documents</h3>
   <table>
@@ -121,16 +121,6 @@
     <tr><td>{{ doc.get_doc_type_display }}</td><td>{{ doc.uploaded_at|date:"d M Y" }}</td><td><a href="{{ doc.file.url }}" class="btn btn-outline btn-sm">View</a></td></tr>
     {% empty %}<tr><td colspan="3" class="empty-state">No documents uploaded.</td></tr>{% endfor %}
   </table>
-  {% if request.user.role == 'HR' %}
-  <form method="post" action="{% url 'employees:upload_document' emp_user.id %}" enctype="multipart/form-data" style="margin-top:14px; display:flex; gap:10px; align-items:end;">
-    {% csrf_token %}
-    <div style="flex:1;"><label>Official Document Type</label>{{ doc_form.doc_type }}</div>
-    <div style="flex:1;"><label>File</label>{{ doc_form.file }}</div>
-    <button type="submit" class="btn btn-accent" style="margin-bottom:14px;">Upload</button>
-  </form>
-  <p style="color:var(--grey-500); font-size:0.8rem; margin:6px 0 0;">
-    HR can only upload official letters here (Offer / Appointment). The employee's own personal documents (degree, PAN, Aadhar, etc.) are uploaded by them from their own profile.
-  </p>
-  {% endif %}
+  <p style="color:var(--grey-500); font-size:0.8rem; margin:10px 0 0;">Read-only. Use Edit to upload official documents.</p>
 </div>
 {% endblock %}

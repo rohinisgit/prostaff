@@ -1,7 +1,9 @@
 {% extends 'core/base.html' %}
 {% block title %}Attendance - HRMS{% endblock %}
 {% block content %}
-<div class="page-header"><h1>Attendance</h1></div>
+<div class="page-header">
+  <h1>Attendance</h1>
+</div>
 <div class="card punch-clock">
   {% if record.in_time and record.out_time %}
     <p>You have completed today's attendance.</p>
