@@ -1,48 +1,111 @@
 {% extends 'core/base.html' %}
 {% block content %}
-<div class="page-header"><h1>My Leave</h1></div>
-<div class="stat-grid">
-  <div class="stat-card"><div class="stat-value">{{ balance.cl_balance }}</div><div class="stat-label">Casual Leave</div></div>
-  <div class="stat-card"><div class="stat-value">{{ balance.el_balance }}</div><div class="stat-label">Earned Leave</div></div>
-  <div class="stat-card orange"><div class="stat-value">{{ balance.sick_balance }}</div><div class="stat-label">Sick Leave</div></div>
-</div>
+<div class="page-header"><h1>Permission / Leave</h1></div>
 
 <div class="card">
-  <h3>Request Leave</h3>
-  <form method="post">
+  <div class="tabs" id="request-type-tabs">
+    <button type="button" class="tab-btn active" data-type="PERMISSION" onclick="setRequestType('PERMISSION')">Permission</button>
+    <button type="button" class="tab-btn" data-type="LEAVE" onclick="setRequestType('LEAVE')">Leave</button>
+  </div>
+
+  <form method="post" id="request-form">
     {% csrf_token %}
-    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0 20px;">
-      <div><label>Leave Type</label>
-        <select name="leave_type" class="form-control" required>
-          <option value="CL">Casual Leave</option><option value="EL">Earned Leave</option><option value="SICK">Sick Leave</option>
-        </select>
+    <input type="hidden" name="request_type" id="request-type-input" value="PERMISSION">
+
+    {% if other_hrs %}
+    <label>Send To (HR)</label>
+    <select name="target_hr" class="form-control" required>
+      <option value="">-- Select an HR colleague --</option>
+      {% for hr in other_hrs %}
+      <option value="{{ hr.id }}">{{ hr.get_full_name|default:hr.username }}</option>
+      {% endfor %}
+    </select>
+    <p style="color:var(--grey-500); font-size:0.8rem; margin:-10px 0 14px;">
+      As HR, your own request is reviewed by a colleague you choose here — never by yourself.
+    </p>
+    {% endif %}
+
+    <div id="permission-fields">
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0 20px;">
+        <div><label>Date</label><input type="date" name="permission_date" class="form-control"></div>
+        <div><label>From Time</label><input type="time" name="from_time" class="form-control"></div>
+        <div><label>To Time</label><input type="time" name="to_time" class="form-control"></div>
       </div>
-      <div><label>Start Date</label><input type="date" name="start_date" class="form-control" required></div>
-      <div><label>End Date</label><input type="date" name="end_date" class="form-control" required></div>
+      <label>Number of Hours</label>
+      <input type="number" step="0.5" min="0" name="num_hours" class="form-control" placeholder="e.g. 2">
     </div>
+
+    <div id="leave-fields" style="display:none;">
+      <label>Leave Type</label>
+      <select name="leave_type" class="form-control">
+        <option value="CL">Casual Leave</option>
+        <option value="EL">Earned Leave</option>
+        <option value="SICK">Sick Leave</option>
+      </select>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+        <div><label>Leave Duration - From</label><input type="date" name="start_date" id="leave-start" class="form-control"></div>
+        <div><label>Leave Duration - To</label><input type="date" name="end_date" id="leave-end" class="form-control"></div>
+      </div>
+      <p style="color:var(--grey-700); font-size:0.85rem; margin-top:-8px;">Number of days on leave: <strong id="leave-days-preview">-</strong></p>
+    </div>
+
     <label>Reason</label>
     <textarea name="reason" class="form-control" rows="2"></textarea>
-    <button type="submit" class="btn btn-primary">Submit Request</button>
+
+    <button type="submit" class="btn btn-primary">Submit</button>
   </form>
 </div>
 
 <div class="card">
   <h3>My Requests</h3>
   <table>
-    <tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th></tr>
+    <tr><th>Type</th><th>Details</th><th>Reason</th><th>Status</th></tr>
     {% for r in requests %}
     <tr>
-      <td>{{ r.get_leave_type_display }}</td>
-      <td>{{ r.start_date }} - {{ r.end_date }}</td>
-      <td>{{ r.num_days }}</td>
-<td>
-  {% if r.status == 'APPROVED' %}<span class="badge badge-success">Approved</span>
-  {% elif r.status == 'REJECTED' %}<span class="badge badge-danger">Rejected</span>
-  {% elif r.status == 'PENDING_HR' %}<span class="badge badge-warning">Pending HR</span>
-  {% else %}<span class="badge badge-warning">Pending Manager</span>{% endif %}
-</td>
+      <td>{{ r.get_request_type_display }}</td>
+      <td>
+        {% if r.request_type == 'PERMISSION' %}
+          {{ r.permission_date }} &middot; {{ r.from_time|time:"h:i A"|default:"-" }} - {{ r.to_time|time:"h:i A"|default:"-" }}
+          {% if r.num_hours %}({{ r.num_hours }} hrs){% endif %}
+        {% else %}
+          {{ r.get_leave_type_display }} &middot; {{ r.start_date }} - {{ r.end_date }} ({{ r.num_days }} day{{ r.num_days|pluralize }})
+        {% endif %}
+      </td>
+      <td>{{ r.reason|default:"-"|truncatewords:10 }}</td>
+      <td>
+        {% if r.status == 'APPROVED' %}<span class="badge badge-success">Approved</span>
+        {% elif r.status == 'REJECTED' %}<span class="badge badge-danger">Rejected</span>
+        {% elif r.status == 'PENDING_HR' %}<span class="badge badge-warning">Pending HR</span>
+        {% elif r.status == 'HR_REJECTED_PENDING_MANAGER' %}<span class="badge badge-warning">HR Declined - Awaiting Manager</span>
+        {% else %}<span class="badge badge-warning">Pending Manager</span>{% endif %}
+      </td>
     </tr>
-    {% empty %}<tr><td colspan="4" class="empty-state">No leave requests yet.</td></tr>{% endfor %}
+    {% empty %}<tr><td colspan="4" class="empty-state">No requests yet.</td></tr>{% endfor %}
   </table>
 </div>
+
+<script>
+function setRequestType(type) {
+  document.getElementById('request-type-input').value = type;
+  document.querySelectorAll('#request-type-tabs .tab-btn').forEach(function (btn) {
+    btn.classList.toggle('active', btn.dataset.type === type);
+  });
+  document.getElementById('permission-fields').style.display = (type === 'PERMISSION') ? '' : 'none';
+  document.getElementById('leave-fields').style.display = (type === 'LEAVE') ? '' : 'none';
+}
+(function () {
+  var s = document.getElementById('leave-start'), e = document.getElementById('leave-end');
+  var preview = document.getElementById('leave-days-preview');
+  function update() {
+    if (s.value && e.value) {
+      var days = Math.round((new Date(e.value) - new Date(s.value)) / 86400000) + 1;
+      preview.textContent = days > 0 ? days : '-';
+    } else {
+      preview.textContent = '-';
+    }
+  }
+  s.addEventListener('change', update);
+  e.addEventListener('change', update);
+})();
+</script>
 {% endblock %}

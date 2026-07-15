@@ -13,20 +13,40 @@ class LeaveBalance(models.Model):
 
 
 class LeaveRequest(models.Model):
+    """Covers both short 'Permission' requests (a few hours on a given day)
+    and full-day 'Leave' requests. Both follow the same approval pipeline;
+    only the fields captured on submission differ."""
+
+    REQUEST_TYPES = [('PERMISSION', 'Permission'), ('LEAVE', 'Leave')]
     LEAVE_TYPES = [('CL', 'Casual Leave'), ('EL', 'Earned Leave'), ('SICK', 'Sick Leave')]
+
     STATUS_CHOICES = [
         ('PENDING_MANAGER', 'Pending Manager Approval'),
         ('PENDING_HR', 'Pending HR Approval'),
         ('APPROVED', 'Approved'),
         ('REJECTED', 'Rejected'),
+        # HR declined an employee's request that a manager had already
+        # approved. It bounces back to that same manager, who must finalize
+        # the rejection themselves before the employee is notified.
+        ('HR_REJECTED_PENDING_MANAGER', 'HR Declined - Awaiting Manager'),
     ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='leave_requests')
-    leave_type = models.CharField(max_length=10, choices=LEAVE_TYPES)
-    start_date = models.DateField()
-    end_date = models.DateField()
+    request_type = models.CharField(max_length=10, choices=REQUEST_TYPES, default='PERMISSION')
+
+    # ---- Leave-only fields ----
+    leave_type = models.CharField(max_length=10, choices=LEAVE_TYPES, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+
+    # ---- Permission-only fields ----
+    permission_date = models.DateField(null=True, blank=True)
+    from_time = models.TimeField(null=True, blank=True)
+    to_time = models.TimeField(null=True, blank=True)
+    num_hours = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+
     reason = models.TextField(blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING_MANAGER')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='PENDING_MANAGER')
     applied_at = models.DateTimeField(auto_now_add=True)
 
     reviewed_by_manager = models.ForeignKey(
@@ -39,9 +59,28 @@ class LeaveRequest(models.Model):
     )
     hr_reviewed_at = models.DateTimeField(null=True, blank=True)
 
+    # Only set when an HR user submits their own request — which OTHER HR
+    # colleague should review it. Never the requester themselves.
+    target_hr = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='leaves_targeted_as_hr'
+    )
+
+    class Meta:
+        ordering = ['-applied_at']
+
     @property
     def num_days(self):
-        return (self.end_date - self.start_date).days + 1
+        if self.request_type == 'LEAVE' and self.start_date and self.end_date:
+            return (self.end_date - self.start_date).days + 1
+        return None
+
+    @property
+    def requires_manager_finalization(self):
+        """True only when an actual manager approval happened before this
+        reached HR — i.e. a regular employee's request that passed through
+        the manager stage. Manager's-own and HR's-own requests skip the
+        manager stage entirely, so this stays False for them."""
+        return self.reviewed_by_manager_id is not None
 
     def get_manager(self):
         """The manager who should review this at the manager stage. Only
@@ -56,11 +95,30 @@ class LeaveRequest(models.Model):
 
     def initial_status(self):
         """Decide the starting stage when this request is created."""
-        if self.user.role == 'MANAGER':
+        if self.user.role in ('MANAGER', 'HR'):
+            # Managers go straight to HR. HR requests go straight to the
+            # chosen target_hr (still represented as PENDING_HR).
             return 'PENDING_HR'
         if self.get_manager():
             return 'PENDING_MANAGER'
         return 'PENDING_HR'
 
     def __str__(self):
-        return f"{self.user} - {self.leave_type} ({self.status})"
+        return f"{self.user} - {self.get_request_type_display()} ({self.status})"
+
+
+class LeaveNotification(models.Model):
+    """A simple inbox entry telling a user about a decision made on a
+    permission/leave request — used to satisfy the various 'notify the
+    employee' / 'notify the manager' requirements in the approval flow."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='leave_notifications')
+    leave_request = models.ForeignKey(LeaveRequest, on_delete=models.CASCADE, related_name='notifications')
+    message = models.CharField(max_length=255)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Notification for {self.user}: {self.message}"
