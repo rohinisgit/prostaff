@@ -1,10 +1,16 @@
 {% extends 'core/base.html' %}
 {% block content %}
 <div class="page-header">
-  <h1>Edit Profile - {{ emp_user.get_full_name|default:emp_user.username }}</h1>
+  <h1>Edit - {{ emp_user.get_full_name|default:emp_user.username }}</h1>
   <a href="{% url 'employees:employee_detail' emp_user.id %}" class="btn btn-outline btn-sm">&larr; Back to View</a>
 </div>
+
+<form method="post" id="status-update-form" action="{% url 'employees:update_employee_status' emp_user.id %}">
+  {% csrf_token %}
+</form>
+
 <div class="card">
+  <h3>Profile</h3>
   {% if form.errors %}
   <ul class="messages"><li class="error">Please fix the highlighted fields below.</li></ul>
   {% endif %}
@@ -16,14 +22,75 @@
       <div><label>Email</label>{{ form.email }}{% if form.email.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.email.errors.0 }}</p>{% endif %}</div>
       <div><label>Employee ID</label>{{ form.employee_id }}{% if form.employee_id.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.employee_id.errors.0 }}</p>{% endif %}</div>
       <div><label>Department</label>{{ form.department }}</div>
-      <div><label>Joining Date</label>{{ form.date_joined_company }}</div>
       <div><label>Phone</label>
         <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.phone_country_code }}{{ form.phone }}</div>
         {% if form.phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.phone.errors.0 }}</p>{% endif %}
       </div>
+      <div><label>Joining Date</label>{{ form.date_joined_company }}</div>
     </div>
-    <button type="submit" class="btn btn-primary">Save Changes</button>
-    <a href="{% url 'employees:employee_detail' emp_user.id %}" class="btn btn-outline">Cancel</a>
+
+    <div style="margin-top:8px; padding-top:20px; border-top:1px solid var(--grey-100);">
+      <button type="submit" class="btn btn-primary">Save Profile</button>
+    </div>
+  </form>
+
+  <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--grey-100);">
+    <label>Employment Status</label>
+    <div style="display:flex; gap:10px; align-items:center; max-width:400px;">
+      <select name="status" form="status-update-form" class="form-control" style="margin-bottom:0;">
+        <option value="ONBOARDING" {% if profile.status == 'ONBOARDING' %}selected{% endif %}>Onboarding</option>
+        <option value="ACTIVE" {% if profile.status == 'ACTIVE' %}selected{% endif %}>Active</option>
+        <option value="EXITED" {% if profile.status == 'EXITED' %}selected{% endif %}>Exited</option>
+      </select>
+      <button type="submit" form="status-update-form" class="btn btn-accent" style="flex-shrink:0;">Update Status</button>
+    </div>
+  </div>
+</div>
+
+{% if emp_user.role != 'ADMIN' %}
+<div class="card">
+  <h3>Role &amp; Access</h3>
+  <form method="post" action="{% url 'employees:change_role' emp_user.id %}" style="display:flex; gap:10px; align-items:end;">
+    {% csrf_token %}
+    <div style="flex:1;"><label>Role</label>{{ role_form.role }}</div>
+    <button type="submit" class="btn btn-accent" style="margin-bottom:14px;">Update Role</button>
+  </form>
+  <p style="color:var(--grey-500); font-size:0.8rem; margin:0;">HR can only assign Employee or Manager. Contact Admin to grant HR/Admin access.</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>Salary Details</h3>
+  {% if salary_form.errors %}
+  <ul class="messages"><li class="error">Please fix the highlighted salary fields below.</li></ul>
+  {% endif %}
+  <form method="post" action="{% url 'employees:update_salary_structure' emp_user.id %}">
+    {% csrf_token %}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>Basic</label>{{ salary_form.basic }}{% if salary_form.basic.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ salary_form.basic.errors.0 }}</p>{% endif %}</div>
+      <div><label>HRA</label>{{ salary_form.hra }}{% if salary_form.hra.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ salary_form.hra.errors.0 }}</p>{% endif %}</div>
+      <div><label>Other Allowances</label>{{ salary_form.other_allowances }}{% if salary_form.other_allowances.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ salary_form.other_allowances.errors.0 }}</p>{% endif %}</div>
+      <div><label>Bonus (flat, monthly)</label>{{ salary_form.bonus }}{% if salary_form.bonus.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ salary_form.bonus.errors.0 }}</p>{% endif %}</div>
+      <div><label>PF %</label>{{ salary_form.pf_percent }}{% if salary_form.pf_percent.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ salary_form.pf_percent.errors.0 }}</p>{% endif %}</div>
+    </div>
+    <label><input type="checkbox" name="pf_applicable" {% if salary_form.instance.pf_applicable %}checked{% endif %}> PF Applicable</label>
+    <button type="submit" class="btn btn-primary" style="margin-top:10px;">Save Salary</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Documents</h3>
+  <table>
+    <tr><th>Type</th><th>Uploaded</th><th></th></tr>
+    {% for doc in documents %}
+    <tr><td>{{ doc.get_doc_type_display }}</td><td>{{ doc.uploaded_at|date:"d M Y" }}</td><td><a href="{{ doc.file.url }}" class="btn btn-outline btn-sm">View</a></td></tr>
+    {% empty %}<tr><td colspan="3" class="empty-state">No documents uploaded.</td></tr>{% endfor %}
+  </table>
+  <form method="post" action="{% url 'employees:upload_document' emp_user.id %}" enctype="multipart/form-data" style="margin-top:14px; display:flex; gap:10px; align-items:end;">
+    {% csrf_token %}
+    <div style="flex:1;"><label>Official Document Type</label>{{ doc_form.doc_type }}</div>
+    <div style="flex:1;"><label>File</label>{{ doc_form.file }}</div>
+    <button type="submit" class="btn btn-accent" style="margin-bottom:14px;">Upload</button>
   </form>
 </div>
 {% endblock %}

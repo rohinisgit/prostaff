@@ -1,13 +1,36 @@
 {% extends 'core/base.html' %}
 {% block content %}
-<div class="page-header"><h1>{{ emp_user.get_full_name|default:emp_user.username }}'s Attendance</h1></div>
+<div class="page-header">
+  <h1>{{ emp_user.get_full_name|default:emp_user.username }}'s Attendance</h1>
+   <a href="{% url 'employees:employee_detail' emp_user.id %}" class="btn btn-outline">← Back to view</a>
+</div>
+
 <div class="card">
   <table>
-    <tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr>
+    <tr>
+      <th>Employee</th>
+      <th>Date</th>
+      <th>In</th>
+      <th>Out</th>
+      <th>
+        <form method="get" id="attendance-period-form" style="margin:0;">
+          <select name="period" class="form-control" style="margin:0; text-transform:none; font-weight:400;" onchange="document.getElementById('attendance-period-form').submit()">
+            <option value="weekly" {% if period == 'weekly' %}selected{% endif %}>Weekly</option>
+            <option value="monthly" {% if period == 'monthly' %}selected{% endif %}>Monthly</option>
+            <option value="yearly" {% if period == 'yearly' %}selected{% endif %}>Yearly</option>
+          </select>
+        </form>
+      </th>
+    </tr>
     {% for r in records %}
-    <tr><td>{{ r.date }}</td><td>{{ r.in_time|time:"h:i A"|default:"-" }}</td><td>{{ r.out_time|time:"h:i A"|default:"-" }}</td><td>{{ r.total_hours }}</td>
-      <td>{% if r.is_late %}<span class="badge badge-warning">Late</span>{% else %}<span class="badge badge-success">On time</span>{% endif %}</td></tr>
-    {% empty %}<tr><td colspan="5" class="empty-state">No records.</td></tr>{% endfor %}
+    <tr>
+      <td>{{ emp_user.get_full_name|default:emp_user.username }}</td>
+      <td>{{ r.date }}</td>
+      <td>{{ r.in_time|time:"h:i A"|default:"-" }}</td>
+      <td>{{ r.out_time|time:"h:i A"|default:"-" }}</td>
+      <td>{% if r.is_late %}<span class="badge badge-warning">Late</span>{% else %}<span class="badge badge-success">On time</span>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty-state">No records for this period.</td></tr>{% endfor %}
   </table>
 </div>
 {% endblock %}

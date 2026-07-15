@@ -232,7 +232,6 @@ tr:hover td { background: var(--grey-50); }
   flex-direction: column;
   position: fixed;
   top: 0; left: 0; bottom: 0;
-  overflow-y: auto;
   z-index: 150;
 }
 
@@ -249,7 +248,12 @@ tr:hover td { background: var(--grey-50); }
 .sidebar-logo-text { font-weight: 700; font-size: 1.15rem; color: var(--black); }
 .sidebar-logo-text span { color: var(--electric-blue); }
 
-.sidebar-menu { flex: 1; padding: 6px 10px; }
+.s.sidebar-menu {
+  flex: 1;
+  padding: 6px 10px;
+  overflow-y: auto;
+  min-height:0;
+}
 
 .sidebar-section {
   padding: 14px 12px 6px;
@@ -424,7 +428,15 @@ tr:hover td { background: var(--grey-50); }
 
 .row-check, #select-all { width: 16px; height: 16px; cursor: pointer; accent-color: var(--electric-blue); }
 
+.updatebutton{
+  display:flex;
+  flex-direction:row;
+  justify-content:flex-end;
+  margin:20px;
+}
+
 @media (max-width: 900px) {
   .payroll-table-card { overflow-x: auto; }
   .payroll-table { min-width: 720px; }
 }
+
