@@ -9,7 +9,6 @@
     {% csrf_token %}
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
       <div><label>Username</label>{{ form.username }}{% if form.username.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.username.errors.0 }}</p>{% endif %}</div>
-      <div><label>Employee ID</label>{{ form.employee_id }}{% if form.employee_id.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.employee_id.errors.0 }}</p>{% endif %}</div>
       <div><label>First Name</label>{{ form.first_name }}{% if form.first_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.first_name.errors.0 }}</p>{% endif %}</div>
       <div><label>Last Name</label>{{ form.last_name }}{% if form.last_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.last_name.errors.0 }}</p>{% endif %}</div>
       <div><label>Email</label>{{ form.email }}{% if form.email.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.email.errors.0 }}</p>{% endif %}</div>
