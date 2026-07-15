@@ -2,49 +2,80 @@
 {% block content %}
 <div class="page-header">
   <h1>Employee Directory</h1>
+  {% if request.user.role == 'HR' %}
+  <a href="{% url 'employees:onboard' %}" class="btn btn-accent">+ Onboard Employee</a>
+  {% endif %}
 </div>
 
 <div class="card">
-  <form method="get" style="margin-bottom:0;">
-    <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Search by name, username or employee ID" style="max-width:320px; margin-bottom:0;">
+  <form method="get" id="directory-filter-form" style="display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom:0;">
+    <div style="flex:2; min-width:220px;">
+      <label>Search</label>
+      <input type="text" name="q" id="directory-search" value="{{ query }}" class="form-control" placeholder="Search by name, username or employee ID" style="margin-bottom:0;">
+    </div>
+    <div style="flex:1; min-width:180px;">
+      <label>Department</label>
+      <select name="department" class="form-control" style="margin-bottom:0;" onchange="document.getElementById('directory-filter-form').submit()">
+        <option value="">All Departments</option>
+        {% for dept in departments %}
+        <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="flex:1; min-width:160px;">
+      <label>Status</label>
+      <select name="status" class="form-control" style="margin-bottom:0;" onchange="document.getElementById('directory-filter-form').submit()">
+        <option value="">All Statuses</option>
+        <option value="ACTIVE" {% if selected_status == 'ACTIVE' %}selected{% endif %}>Active</option>
+        <option value="EXITED" {% if selected_status == 'EXITED' %}selected{% endif %}>Exited</option>
+      </select>
+    </div>
   </form>
 </div>
 
-{% for section in sections %}
-<div class="dir-section">
-  <div class="dir-section-header dir-role-{{ section.role|lower }}">
-    <span class="dir-role-name">{{ section.role_label }}</span>
-    <span class="dir-role-count">{{ section.total_count }} {% if section.total_count == 1 %}person{% else %}people{% endif %}</span>
-  </div>
-
-  {% for dept in section.departments %}
-  <div class="card dir-dept-card">
-    <div class="dir-dept-header">
-      <span class="dir-dept-name">{{ dept.name }}</span>
-      <span class="badge badge-info">{{ dept.employees|length }}</span>
-    </div>
-    <table>
-      <tr><th>Employee</th><th>ID</th><th>Status</th><th></th></tr>
-      {% for emp in dept.employees %}
-      <tr>
-        <td>{{ emp.get_full_name|default:emp.username }}</td>
-        <td>{{ emp.employee_id|default:"-" }}</td>
-        <td>
-          {% if emp.profile.status == 'EXITED' %}<span class="badge badge-danger">Exited</span>
-          {% elif emp.is_present_today %}<span class="badge badge-success">Active</span>
-          {% else %}<span class="badge badge-warning">Inactive</span>{% endif %}
-        </td>
-        <td>
-          <a href="{% url 'employees:employee_detail' emp.id %}" class="btn btn-outline btn-sm">View</a>
-          <a href="{% url 'employees:delete_employee' emp.id %}" class="btn btn-danger btn-sm">Delete</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-  </div>
-  {% endfor %}
+<div class="card">
+  <table>
+    <tr>
+      <th>Employee</th>
+      <th>ID</th>
+      <th>Department</th>
+      <th>Role</th>
+      <th>Status</th>
+      <th></th>
+    </tr>
+    {% for emp in employees %}
+    <tr>
+      <td>{{ emp.get_full_name|default:emp.username }}</td>
+      <td>{{ emp.employee_id|default:"-" }}</td>
+      <td>{{ emp.department|default:"No Department" }}</td>
+      <td>{{ emp.get_role_display }}</td>
+      <td>
+        {% if emp.display_status == 'EXITED' %}
+          <span class="badge badge-danger">Exited</span>
+        {% else %}
+          <span class="badge badge-info">Active</span>
+        {% endif %}
+      </td>
+      <td>
+        <a href="{% url 'employees:employee_detail' emp.id %}" class="btn btn-primary btn-sm">View</a>
+        <a href="{% url 'employees:edit_employee_profile' emp.id %}" class="btn btn-accent btn-sm">Edit</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="empty-state">No employees found.</td></tr>
+    {% endfor %}
+  </table>
 </div>
-{% empty %}
-<div class="card"><p class="empty-state">No employees found.</p></div>
-{% endfor %}
+
+<script>
+  (function () {
+    var searchInput = document.getElementById('directory-search');
+    var form = document.getElementById('directory-filter-form');
+    var debounceTimer;
+    searchInput.addEventListener('input', function () {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function () { form.submit(); }, 500);
+    });
+  })();
+</script>
 {% endblock %}

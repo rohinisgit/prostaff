@@ -41,8 +41,7 @@ AADHAR_ATTRS = {
 
 
 class EmployeeSelfEditForm(forms.ModelForm):
-    """Fields an employee is allowed to edit on their own profile. HR no
-    longer has a parallel edit form — these are entirely self-managed."""
+    """Fields an employee is allowed to edit on their own profile."""
     first_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     last_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     phone_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
@@ -104,17 +103,18 @@ class EmployeeSelfEditForm(forms.ModelForm):
 
 
 class NewEmployeeForm(forms.ModelForm):
-    """Used by HR to onboard a new employee (creates the User)."""
+    """Used by HR to onboard a new employee (creates the User).
+    Employee ID is no longer collected here — HR assigns it later from the
+    employee's Edit Profile page if needed."""
     password = forms.CharField(widget=forms.PasswordInput, help_text="Temporary password for the employee")
     first_name = forms.CharField(max_length=150, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     last_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     phone_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
     phone = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
-    employee_id = forms.CharField(max_length=20, required=False, validators=[alnum_id_validator], widget=forms.TextInput(attrs=ID_ATTRS))
 
     class Meta:
         model = User
-        fields = ['username', 'first_name', 'last_name', 'email', 'employee_id',
+        fields = ['username', 'first_name', 'last_name', 'email',
                   'role', 'department', 'date_joined_company', 'phone_country_code', 'phone', 'password']
         widgets = {'date_joined_company': forms.DateInput(attrs={'type': 'date'})}
 
@@ -136,6 +136,26 @@ class NewEmployeeForm(forms.ModelForm):
         return user
 
 
+class HREmployeeEditForm(forms.ModelForm):
+    """HR edits an employee's core profile details from the directory's
+    Edit button — name, contact info, department, employee ID, joining date."""
+    first_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
+    last_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
+    phone_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
+    phone = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
+    employee_id = forms.CharField(max_length=20, required=False, validators=[alnum_id_validator], widget=forms.TextInput(attrs=ID_ATTRS))
+
+    class Meta:
+        model = User
+        fields = ['first_name', 'last_name', 'email', 'employee_id', 'department', 'date_joined_company', 'phone_country_code', 'phone']
+        widgets = {'date_joined_company': forms.DateInput(attrs={'type': 'date'})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault('class', 'form-control')
+
+
 class HRDocumentForm(forms.ModelForm):
     """HR can only upload official, company-issued letters — never an
     employee's personal documents."""
@@ -155,9 +175,7 @@ class HRDocumentForm(forms.ModelForm):
 
 
 class SelfDocumentForm(forms.ModelForm):
-    """Everyone uploads their own personal documents here (degree, PAN,
-    Aadhar, ID proof, experience letter, etc.) — never an official company
-    letter, which only HR can issue."""
+    """Everyone uploads their own personal documents here."""
     doc_type = forms.ChoiceField(
         choices=[c for c in EmployeeDocument.DOC_TYPES if c[0] in EmployeeDocument.SELF_DOC_TYPES],
         label="Document Type",

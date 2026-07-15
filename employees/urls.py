@@ -17,10 +17,12 @@ path('resignation/<int:resignation_id>/quit-anyway/', views.quit_after_negotiati
     path('onboard/', views.onboard_employee, name='onboard'),
     path('onboarding/', views.onboarding_list, name='onboarding_list'),
     path('<int:user_id>/', views.employee_detail, name='employee_detail'),
+    path('<int:user_id>/edit-profile/', views.edit_employee_profile, name='edit_employee_profile'),
     path('<int:user_id>/upload-document/', views.upload_document, name='upload_document'),
     path('<int:user_id>/delete/', views.delete_employee, name='delete_employee'),
     path('<int:user_id>/change-role/', views.change_role, name='change_role'),
     path('my-department/', views.my_department, name='my_department'),
     path('<int:user_id>/team-member/', views.team_member_detail, name='team_member_detail'),
     path('<int:user_id>/complete-onboarding/', views.complete_onboarding, name='complete_onboarding'),
+
 ]

@@ -10,7 +10,7 @@ from attendance.models import AttendanceRecord
 from employees.models import EmployeeProfile, EmployeeDocument, ResignationRequest
 from employees.forms import (
     EmployeeSelfEditForm, NewEmployeeForm, HRDocumentForm, SelfDocumentForm,
-    RoleChangeForm, ResignationRequestForm,
+    RoleChangeForm, ResignationRequestForm, HREmployeeEditForm,
 )
 
 
@@ -189,13 +189,33 @@ def quit_after_negotiation(request, resignation_id):
         messages.success(request, "Your response has been sent to HR. They'll confirm your notice period shortly.")
     return redirect('employees:my_profile')
 
+def _department_sort_key(dept_name):
+    """Data Entry departments first, then Software, then everything else
+    alphabetically."""
+    lower = dept_name.lower()
+    if 'data entry' in lower:
+        priority = 0
+    elif 'software' in lower:
+        priority = 1
+    else:
+        priority = 2
+    return (priority, lower)
+
+
 @hr_or_admin_required
 def employee_directory(request):
     query = request.GET.get('q', '')
+    department_filter = request.GET.get('department', '')
+    status_filter = request.GET.get('status', '')
+
     employees = User.objects.exclude(id=request.user.id).select_related('department', 'profile')
 
     if request.user.role == 'HR':
         employees = employees.exclude(role__in=['HR', 'ADMIN'])
+
+    # Employees still onboarding haven't actually joined yet — they only
+    # show up in "View Onboarding", not in the main directory.
+    employees = employees.exclude(profile__status='ONBOARDING')
 
     if query:
         employees = employees.filter(
@@ -204,30 +224,46 @@ def employee_directory(request):
             Q(employee_id__icontains=query)
         )
 
-    present_user_ids = _present_user_ids_today()
+    if department_filter:
+        if department_filter == 'No Department':
+            employees = employees.filter(department__isnull=True)
+        else:
+            employees = employees.filter(department__name=department_filter)
 
-    role_order = ['HR', 'MANAGER', 'EMPLOYEE']
-    role_labels = {'HR': 'HR', 'MANAGER': 'Managers', 'EMPLOYEE': 'Employees'}
+    employees = list(employees)
 
-    sections = []
-    for role in role_order:
-        role_employees = employees.filter(role=role).order_by('first_name', 'username')
-        if not role_employees.exists():
+    base_qs = User.objects.exclude(id=request.user.id).exclude(profile__status='ONBOARDING')
+    if request.user.role == 'HR':
+        base_qs = base_qs.exclude(role__in=['HR', 'ADMIN'])
+    dept_qs = base_qs.select_related('department')
+    dept_names = sorted(
+        {emp.department.name for emp in dept_qs if emp.department},
+        key=_department_sort_key,
+    )
+    has_no_dept = base_qs.filter(department__isnull=True).exists()
+    departments = dept_names + (['No Department'] if has_no_dept else [])
+
+    employee_rows = []
+    for emp in employees:
+        profile = getattr(emp, 'profile', None)
+        emp_status = 'EXITED' if profile and profile.status == 'EXITED' else 'ACTIVE'
+        if status_filter and status_filter != emp_status:
             continue
-        dept_map = {}
-        for emp in role_employees:
-            emp.is_present_today = emp.id in present_user_ids
-            dept_name = emp.department.name if emp.department else 'No Department'
-            dept_map.setdefault(dept_name, []).append(emp)
-        departments = [{'name': name, 'employees': emps} for name, emps in sorted(dept_map.items())]
-        sections.append({
-            'role': role,
-            'role_label': role_labels[role],
-            'total_count': role_employees.count(),
-            'departments': departments,
-        })
+        emp.display_status = emp_status
+        employee_rows.append(emp)
 
-    return render(request, 'employees/directory.html', {'sections': sections, 'query': query})
+    employee_rows.sort(key=lambda emp: (
+        _department_sort_key(emp.department.name if emp.department else 'zzz_no_department'),
+        (emp.first_name or emp.username).lower(),
+    ))
+
+    return render(request, 'employees/directory.html', {
+        'employees': employee_rows,
+        'query': query,
+        'departments': departments,
+        'selected_department': department_filter,
+        'selected_status': status_filter,
+    })
 
 
 @hr_or_admin_required
@@ -251,6 +287,23 @@ def employee_detail(request, user_id):
         'emp_user': emp_user, 'profile': profile, 'documents': documents, 'doc_form': doc_form,
         'role_form': role_form, 'latest_resignation': latest_resignation,
     })
+
+@hr_only_required
+def edit_employee_profile(request, user_id):
+    """HR edits an employee's core profile fields directly from the
+    directory's Edit button."""
+    emp_user = get_object_or_404(User, id=user_id)
+
+    if request.method == 'POST':
+        form = HREmployeeEditForm(request.POST, instance=emp_user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"{emp_user}'s profile has been updated.")
+            return redirect('employees:employee_detail', user_id=emp_user.id)
+    else:
+        form = HREmployeeEditForm(instance=emp_user)
+
+    return render(request, 'employees/edit_employee_profile.html', {'emp_user': emp_user, 'form': form})
 
 
 @hr_only_required
