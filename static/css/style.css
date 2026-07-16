@@ -164,10 +164,6 @@ tr:hover td { background: var(--grey-50); }
 
 .empty-state { text-align: center; padding: 40px; color: var(--grey-500); }
 
-@media (max-width: 768px) {
-  .navbar { flex-direction: column; height: auto; padding: 12px; gap: 10px; }
-  .navbar-links { justify-content: center; }
-}
 .user-name-wrap { position: relative; display: inline-block; }
 .notif-badge {
   position: absolute;
@@ -186,6 +182,25 @@ tr:hover td { background: var(--grey-50); }
   padding: 0 3px;
   line-height: 1;
 }
+
+/* Small inline badge used inside sidebar links (e.g. pending counts) */
+.sidebar-badge {
+  margin-left: auto;
+  background: var(--sunset-orange);
+  color: var(--white);
+  font-size: 0.68rem;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
 .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid var(--grey-100); }
 .tab-btn {
   background: none; border: none; padding: 10px 20px; font-size: 0.92rem; font-weight: 600;
@@ -213,7 +228,9 @@ tr:hover td { background: var(--grey-50); }
   .nav-dropdown:hover .nav-dropdown-menu { display: block; }
 }
 
-/* ---------- Sidebar Layout ---------- */
+/* ==========================================================
+   Sidebar Layout — DESKTOP / TABLET (default, >900px)
+   ========================================================== */
 .app-shell { display: flex; min-height: 100vh; }
 
 .sidebar {
@@ -223,11 +240,15 @@ tr:hover td { background: var(--grey-50); }
   display: flex;
   flex-direction: column;
   position: fixed;
-  top: 0; left: 0; bottom: 0;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  height: 100dvh; /* better on mobile browsers with dynamic address bars */
   z-index: 150;
 }
 
 .sidebar-logo {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -261,58 +282,115 @@ tr:hover td { background: var(--grey-50); }
   margin-bottom: 2px;
 }
 .sidebar-link svg { flex-shrink: 0; }
-.sidebar-link:hover { background: var(--grey-100); color: var(--black); }
-.sidebar-link.active { background: var(--electric-blue); color: var(--white); }
+.sidebar-link:hover {
+  background: var(--electric-blue);
+  color: var(--white);
+}
+.sidebar-link:hover svg {
+  stroke: var(--white);
+}
 
+/* Scrollable menu area — this is what allows the footer below to
+   always stay pinned, no matter how many links are in the list. */
+.sidebar-menu {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 10px;
+}
+
+/* Footer stays at the bottom of the fixed, full-height sidebar */
 .sidebar-footer {
+  flex-shrink: 0;
   border-top: 1px solid var(--grey-100);
-  padding: 18px 20px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
+  gap: 12px;
+  background: var(--white);
 }
-
-.sidebar-user {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 0.88rem;
-  flex-wrap: wrap;
-  width: 100%;
-}
+.sidebar-user { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.88rem; }
 .sidebar-user .notif-badge { position: static; margin-left: auto; }
-
-.sidebar-logout-form {
-  margin: 0;
-  width: 100%;
-}
-.sidebar-logout-form .btn {
-  background: #E4483A;
-  color: var(--white);
-  border: none;
-  width:100%;
-  justify-content: center;
-  padding:11px 11px;
-  font-size:0.92rem;
-  margin-top:10px;
-}
+.sidebar-logout-form { margin: 0; }
+.sidebar-logout-form .btn { width: 100%; justify-content: center;  background: #E4483A;
+  color: var(--white); }
 .sidebar-logout-form .btn:hover {
   background: #C93B2F;
   color: var(--white);
-  
 }
 
-.main-content { margin-left: 240px; width: 100%; }
+.main-content {
+  margin-left: 240px;
+  width: calc(100% - 240px);
+  min-height: 100vh;
+}
 
+/* ==========================================================
+   Sidebar Layout — MOBILE (<=900px)
+   Single, consolidated media query. No nesting, no duplicates.
+   ========================================================== */
 @media (max-width: 900px) {
   .app-shell { flex-direction: column; }
-  .sidebar { position: static; width: 100%; flex-direction: row; align-items: center; overflow-x: auto; }
-  .sidebar-logo { border-bottom: none; border-right: 1px solid var(--grey-100); flex-shrink: 0; }
-  .sidebar-menu { display: flex; flex: none; }
+
+  .sidebar {
+    position: fixed;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    height: 60px;
+    border-right: none;
+    border-bottom: 1px solid var(--grey-100);
+    top: 0;
+    left: 0;
+  }
+
+  .sidebar-logo {
+    border-bottom: none;
+    border-right: 1px solid var(--grey-100);
+    flex-shrink: 0;
+  }
+
+  .sidebar-menu {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    padding: 0 6px;
+  }
+  .sidebar-link { flex-shrink: 0; }
   .sidebar-section { display: none; }
-  .sidebar-footer { flex-direction: row; border-top: none; border-left: 1px solid var(--grey-100); flex-shrink: 0; }
-  .main-content { margin-left: 0; }
+
+  /* Footer becomes its own fixed bar pinned to the bottom of the
+     viewport — always visible, never hidden or scrolled away. */
+  .sidebar-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid var(--grey-100);
+    z-index: 200;
+  }
+  .sidebar-user {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sidebar-logout-form { flex-shrink: 0; width: auto; }
+  .sidebar-logout-form .btn { width: auto; padding: 8px 16px; }
+
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+    padding-top: 60px;   /* clears the fixed top bar */
+    padding-bottom: 80px; /* clears the fixed bottom footer */
+  }
 }
 
 /* ---------- Login image ---------- */
@@ -446,9 +524,4 @@ tr:hover td { background: var(--grey-50); }
   flex-direction:row;
   justify-content:flex-end;
   margin:20px;
-}
-
-@media (max-width: 900px) {
-  .payroll-table-card { overflow-x: auto; }
-  .payroll-table { min-width: 720px; }
 }
