@@ -27,7 +27,7 @@
       <select name="status" class="form-control" style="margin-bottom:0;" onchange="document.getElementById('directory-filter-form').submit()">
         <option value="">All Statuses</option>
         <option value="ACTIVE" {% if selected_status == 'ACTIVE' %}selected{% endif %}>Active</option>
-        <option value="ONBOARDING" {% if selected_status == 'ONBOARDING' %}selected{% endif %}>Onboarding</option>
+        <option value="ONBOARD" {% if selected_status == 'ONBOARD' %}selected{% endif %}>Onboard</option>
         <option value="EXITED" {% if selected_status == 'EXITED' %}selected{% endif %}>Exited</option>
       </select>
     </div>
@@ -53,10 +53,10 @@
       <td>
         {% if emp.display_status == 'EXITED' %}
           <span class="badge badge-danger">Exited</span>
-        {% elif emp.display_status == 'ONBOARDING' %}
-          <span class="badge badge-warning">Onboarding</span>
+        {% elif emp.display_status == 'ONBOARD' %}
+          <span class="badge badge-warning">Onboard</span>
         {% else %}
-          <span class="badge badge-info">Active</span>
+          <span class="badge badge-active">Active</span>
         {% endif %}
       </td>
       <td>

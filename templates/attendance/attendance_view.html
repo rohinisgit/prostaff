@@ -1,0 +1,165 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header">
+  <h1>{% if emp_user %}{{ emp_user.get_full_name|default:emp_user.username }}'s Attendance{% else %}My Attendance{% endif %}</h1>
+  <button type="button" class="btn btn-outline btn-sm" onclick="history.back()">&larr; Back</button>
+</div>
+
+<div class="card">
+  <form method="get" id="attendance-view-form" style="display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom:0;">
+    <div style="min-width:140px;">
+      <label>View</label>
+      <select name="view" class="form-control" style="margin-bottom:0;" onchange="document.getElementById('attendance-view-form').submit()">
+        <option value="monthly" {% if view_type == 'monthly' %}selected{% endif %}>Monthly</option>
+        <option value="weekly" {% if view_type == 'weekly' %}selected{% endif %}>Weekly</option>
+        <option value="yearly" {% if view_type == 'yearly' %}selected{% endif %}>Yearly</option>
+      </select>
+    </div>
+
+    {% if view_type != 'yearly' %}
+    <div style="min-width:140px;">
+      <label>Month</label>
+      <select name="month" class="form-control" style="margin-bottom:0;" onchange="document.getElementById('attendance-view-form').submit()">
+        {% for m_val, m_label in month_options %}
+        <option value="{{ m_val }}" {% if m_val == month %}selected{% endif %}>{{ m_label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <div style="min-width:120px;">
+      <label>Year</label>
+      <select name="year" class="form-control" style="margin-bottom:0;" onchange="document.getElementById('attendance-view-form').submit()">
+        {% for y in year_options %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% if view_type == 'weekly' %}
+    <div style="min-width:200px;">
+      <label>Week</label>
+      <select name="week" class="form-control" style="margin-bottom:0;" onchange="document.getElementById('attendance-view-form').submit()">
+        {% for w_val, w_label in week_options %}
+        <option value="{{ w_val }}" {% if w_val == week %}selected{% endif %}>{{ w_label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <div>
+      {% if emp_user %}
+      <a href="{% url 'attendance:download_employee_attendance_view' emp_user.id %}?view={{ view_type }}&year={{ year }}&month={{ month }}&week={{ week }}" class="btn btn-accent">Download Excel</a>
+      {% else %}
+      <a href="{% url 'attendance:download_my_attendance_view' %}?view={{ view_type }}&year={{ year }}&month={{ month }}&week={{ week }}" class="btn btn-accent">Download Excel</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+{% if view_type == 'monthly' %}
+  {% with summary=monthly_summary %}
+  <div class="card" style="overflow-x:auto;">
+    <h3>{{ summary.month_name }}</h3>
+    <table style="min-width:900px;">
+      <tr>
+        <th>Day</th>
+        {% for d in summary.daily_rows %}<th>{{ d.day_label }}</th>{% endfor %}
+      </tr>
+      <tr>
+        <td><strong>Hours</strong></td>
+        {% for d in summary.daily_rows %}
+        <td style="{% if d.is_sunday %}background:#FFF7F2;{% endif %} text-align:center;">{{ d.hours|default:"-" }}</td>
+        {% endfor %}
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Summary</h3>
+    <table>
+      <tr><th>Metric</th><th>Value</th></tr>
+      <tr><td>Total Days Worked</td><td>{{ summary.total_days_worked }}</td></tr>
+      <tr><td>On Duty</td><td>{{ summary.on_duty }}</td></tr>
+      <tr><td>CL Quota</td><td>{{ summary.cl_quota }}</td></tr>
+      <tr><td>Sunday Hours</td><td>{{ summary.sunday_hours }}</td></tr>
+      <tr><td>Total Hours Worked</td><td>{{ summary.total_hours_worked }}</td></tr>
+      <tr><td>WKD (Excl. Sunday)</td><td>{{ summary.wkd }}</td></tr>
+      <tr><td>Actual Leave</td><td>{{ summary.actual_leave }}</td></tr>
+      <tr><td>LOP</td><td>{{ summary.lop }}</td></tr>
+      <tr><td>Total (PH/Sunday)</td><td>{{ summary.total_ph_sunday }}</td></tr>
+      <tr><td>Total Days in Month</td><td>{{ summary.days_in_month }}</td></tr>
+      <tr><td>Night Duty</td><td>{{ summary.night_duty }}</td></tr>
+    </table>
+  </div>
+  {% endwith %}
+
+{% elif view_type == 'weekly' %}
+  {% with summary=weekly_summary %}
+  <div class="card" style="overflow-x:auto;">
+    <h3>{{ summary.label }}</h3>
+    <table>
+      <tr><th>Date</th><th>Day</th><th>In</th><th>Out</th><th>Hours</th></tr>
+      {% for d in summary.daily_rows %}
+      <tr style="{% if d.is_sunday %}background:#FFF7F2;{% endif %}">
+        <td>{{ d.date }}</td>
+        <td>{{ d.date|date:"l" }}</td>
+        <td>{{ d.in_time|time:"h:i A"|default:"-" }}</td>
+        <td>{{ d.out_time|time:"h:i A"|default:"-" }}</td>
+        <td>{{ d.hours|default:"-" }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Summary</h3>
+    <table>
+      <tr><th>Metric</th><th>Value</th></tr>
+      <tr><td>Days Worked</td><td>{{ summary.days_worked }}</td></tr>
+      <tr><td>Total Hours Worked</td><td>{{ summary.total_hours_worked }}</td></tr>
+      <tr><td>Sundays in Range</td><td>{{ summary.sundays }}</td></tr>
+      <tr><td>Night Duty</td><td>{{ summary.night_duty }}</td></tr>
+      <tr><td>Total Days in Range</td><td>{{ summary.total_days }}</td></tr>
+    </table>
+  </div>
+  {% endwith %}
+
+{% else %}
+  {% with summary=yearly_summary %}
+  <div class="card" style="overflow-x:auto;">
+    <h3>{{ summary.year }} — Month by Month</h3>
+    <table>
+      <tr>
+        <th>Month</th><th>Days Worked</th><th>CL Quota</th><th>Total Hours</th>
+        <th>Actual Leave</th><th>LOP</th><th>Night Duty</th>
+      </tr>
+      {% for s in summary.months %}
+      <tr>
+        <td>{{ s.month_name }}</td>
+        <td>{{ s.total_days_worked }}</td>
+        <td>{{ s.cl_quota }}</td>
+        <td>{{ s.total_hours_worked }}</td>
+        <td>{{ s.actual_leave }}</td>
+        <td>{{ s.lop }}</td>
+        <td>{{ s.night_duty }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Yearly Totals</h3>
+    <table>
+      <tr><th>Metric</th><th>Value</th></tr>
+      <tr><td>Total Days Worked</td><td>{{ summary.total_days_worked }}</td></tr>
+      <tr><td>Total CL Quota</td><td>{{ summary.total_cl_quota }}</td></tr>
+      <tr><td>Total Hours Worked</td><td>{{ summary.total_hours_worked }}</td></tr>
+      <tr><td>Total Actual Leave</td><td>{{ summary.total_actual_leave }}</td></tr>
+      <tr><td>Total LOP</td><td>{{ summary.total_lop }}</td></tr>
+      <tr><td>Total Night Duty</td><td>{{ summary.total_night_duty }}</td></tr>
+    </table>
+  </div>
+  {% endwith %}
+{% endif %}
+{% endblock %}

@@ -387,6 +387,8 @@ tr:hover td { background: var(--grey-50); }
   .sidebar-logout-form { flex-shrink: 0; width: auto; }
   .sidebar-logout-form .btn { width: auto; padding: 8px 16px; }
 
+  .badge-active { background: var(--electric-blue); color: var(--white); }
+
   .main-content {
     margin-left: 0;
     width: 100%;
@@ -587,4 +589,15 @@ table th:last-child, table td:last-child {
   flex-direction:row;
   justify-content:flex-end;
   margin:20px;
+}
+.badge-active { background: #E5F7EC; color: #1D9A55; }
+
+.attendance-btn {
+  border-color: var(--electric-blue);
+  color: var(--electric-blue);
+  font-weight: 700;
+}
+.attendance-btn:hover {
+  background: var(--electric-blue);
+  color: var(--white);
 }

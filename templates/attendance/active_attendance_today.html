@@ -1,0 +1,35 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header">
+  <h1>Attendance — {{ today }}</h1>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card"><div class="stat-value">{{ total_active }}</div><div class="stat-label">Active Employees</div></div>
+  <div class="stat-card"><div class="stat-value">{{ present_count }}</div><div class="stat-label">Present Today</div></div>
+  <div class="stat-card orange"><div class="stat-value">{{ absent_count }}</div><div class="stat-label">Absent Today</div></div>
+</div>
+
+<div class="card">
+  <table>
+    <tr><th>Employee</th><th>In</th><th>Out</th><th>Total Hours</th><th>Status</th><th></th></tr>
+    {% for row in rows %}
+    <tr>
+      <td>{{ row.user.get_full_name|default:row.user.username }}</td>
+      <td>{{ row.in_time|time:"h:i A"|default:"-" }}</td>
+      <td>{{ row.out_time|time:"h:i A"|default:"-" }}</td>
+      <td>{{ row.total_hours }} / 8</td>
+      <td>
+        {% if row.is_present %}
+          <span class="badge badge-success">Present</span>
+          {% if row.is_late %}<span class="badge badge-warning">Late</span>{% endif %}
+        {% else %}
+          <span class="badge badge-danger">Absent</span>
+        {% endif %}
+      </td>
+      <td><a href="{% url 'attendance:monthly_attendance_hr' row.user.id %}" class="btn btn-outline btn-sm">Monthly Sheet</a></td>
+    </tr>
+    {% empty %}<tr><td colspan="6" class="empty-state">No active employees found.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}
