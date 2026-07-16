@@ -582,3 +582,9 @@ table th:last-child, table td:last-child {
   line-height: 1;
   flex-shrink: 0;
 }
+.updatebutton{
+  display:flex;
+  flex-direction:row;
+  justify-content:flex-end;
+  margin:20px;
+}
