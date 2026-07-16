@@ -30,7 +30,7 @@
       <td>{{ r.out_time|time:"h:i A"|default:"-" }}</td>
       <td>{% if r.is_late %}<span class="badge badge-warning">Late</span>{% else %}<span class="badge badge-success">On time</span>{% endif %}</td>
     </tr>
-    {% empty %}<tr><td colspan="5" class="empty-state">No records for this period.</td></tr>{% endfor %}
+    {% empty %}<tr><td colspan="5" class="empty-state"></td></tr>{% endfor %}
   </table>
 </div>
 {% endblock %}
