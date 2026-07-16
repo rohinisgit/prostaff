@@ -1,8 +1,18 @@
 from datetime import datetime, time
 from django.db import models
 from django.conf import settings
+from django.utils import timezone as dj_timezone
 
 SHIFT_START = time(9, 30)  # 9:30 AM shift start used for late detection
+NIGHT_START = time(22, 0)  # 10:00 PM
+NIGHT_END = time(6, 0)     # 6:00 AM
+
+
+def _falls_in_night_window(t):
+    """True if a local time-of-day falls within the 10 PM - 6 AM night window."""
+    if t is None:
+        return False
+    return t >= NIGHT_START or t <= NIGHT_END
 
 
 class AttendanceRecord(models.Model):
@@ -13,6 +23,10 @@ class AttendanceRecord(models.Model):
     total_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     is_late = models.BooleanField(default=False)
     late_minutes = models.IntegerField(default=0)
+
+    # Auto-detected on save: true if the in/out punch falls inside the
+    # 10 PM - 6 AM window (local time).
+    is_night_duty = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('user', 'date')
@@ -31,6 +45,13 @@ class AttendanceRecord(models.Model):
             else:
                 self.is_late = False
                 self.late_minutes = 0
+
+        # Night duty check uses actual local wall-clock time (converted from
+        # the stored UTC-aware datetime), not the naive stripped value above.
+        in_t = dj_timezone.localtime(self.in_time).time() if self.in_time else None
+        out_t = dj_timezone.localtime(self.out_time).time() if self.out_time else None
+        self.is_night_duty = _falls_in_night_window(in_t) or _falls_in_night_window(out_t)
+
         super().save(*args, **kwargs)
 
     @property
@@ -44,3 +65,22 @@ class AttendanceRecord(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.date}"
+
+
+class MonthlyAttendanceSheet(models.Model):
+    """One row per employee per month. Stores the generated Excel snapshot
+    so historical months stay available even after the underlying daily
+    records age out of casual view. Regenerated automatically whenever the
+    employee punches in/out during that month."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='monthly_sheets')
+    year = models.IntegerField()
+    month = models.IntegerField()
+    excel_file = models.FileField(upload_to='monthly_attendance/', null=True, blank=True)
+    generated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'year', 'month')
+        ordering = ['-year', '-month']
+
+    def __str__(self):
+        return f"Monthly sheet - {self.user} ({self.year}-{self.month:02d})"

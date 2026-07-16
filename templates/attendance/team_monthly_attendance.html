@@ -1,0 +1,113 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header">
+  <h1>Team Monthly Attendance</h1>
+</div>
+
+<div class="card">
+  <form method="get" id="team-attendance-form" style="display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom:0;">
+    <div style="min-width:140px;">
+      <label>Month</label>
+      <select name="month" class="form-control" style="margin-bottom:0;">
+        {% for m_val, m_label in month_options %}
+        <option value="{{ m_val }}" {% if m_val == month %}selected{% endif %}>{{ m_label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="min-width:120px;">
+      <label>Year</label>
+      <select name="year" class="form-control" style="margin-bottom:0;">
+        {% for y in year_options %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <label>Search</label>
+      <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Name or Employee ID" style="margin-bottom:0;">
+    </div>
+    <div style="min-width:160px;">
+      <label>Role</label>
+      <select name="role" class="form-control" style="margin-bottom:0;">
+        <option value="">All Roles</option>
+        {% for r_val, r_label in role_options %}
+        <option value="{{ r_val }}" {% if r_val == selected_role %}selected{% endif %}>{{ r_label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="min-width:180px;">
+      <label>Department</label>
+      <select name="department" class="form-control" style="margin-bottom:0;">
+        <option value="">All Departments</option>
+        {% for dept in department_options %}
+        <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <button type="submit" class="btn btn-primary">Filter</button>
+    </div>
+  </form>
+</div>
+
+<div class="page-header" style="margin-top:16px;">
+  <h1 style="font-size:1.1rem;">{{ month_name }}</h1>
+  <a href="{% url 'attendance:download_team_monthly_attendance' year month %}?q={{ query }}&role={{ selected_role }}&department={{ selected_department }}" class="btn btn-accent btn-sm">Download Excel</a>
+</div>
+
+<div class="stat-card" style="max-width:180px; padding:12px 16px; margin-bottom:16px;">
+  <div class="stat-value" style="font-size:1.3rem;">{{ total_active }}</div>
+  <div class="stat-label">Active Employees</div>
+</div>
+
+<div class="card" style="overflow-x:auto; padding:0;">
+  <table style="min-width:1400px;">
+    <tr>
+      <th style="position:sticky; left:0; background:var(--grey-50); z-index:2;">Employee</th>
+      <th>Emp ID</th>
+      <th>Role</th>
+      <th>Department</th>
+      {% for label in day_labels %}
+      <th>{{ label }}</th>
+      {% endfor %}
+      <th>Days Worked</th>
+      <th>CL</th>
+      <th>On Duty</th>
+      <th>Sunday Hrs</th>
+      <th>Total Hrs</th>
+      <th>WKD</th>
+      <th>Actual Leave</th>
+      <th>LOP</th>
+      <th>PH/Sunday</th>
+      <th>Days in Month</th>
+      <th>Night Duty</th>
+      <th></th>
+    </tr>
+    {% for s in summaries %}
+    <tr>
+      <td style="position:sticky; left:0; background:var(--white); font-weight:600;">{{ s.user.get_full_name|default:s.user.username }}</td>
+      <td>{{ s.user.employee_id|default:"-" }}</td>
+      <td>{{ s.user.get_role_display }}</td>
+      <td>{{ s.user.department|default:"-" }}</td>
+      {% for d in s.daily_rows %}
+      <td style="{% if d.is_sunday %}background:#FFF7F2;{% endif %} text-align:center;">{{ d.hours|default:"-" }}</td>
+      {% endfor %}
+      <td style="text-align:center;">{{ s.total_days_worked }}</td>
+      <td style="text-align:center;">{{ s.cl_quota }}</td>
+      <td style="text-align:center;">{{ s.on_duty }}</td>
+      <td style="text-align:center;">{{ s.sunday_hours }}</td>
+      <td style="text-align:center;">{{ s.total_hours_worked }}</td>
+      <td style="text-align:center;">{{ s.wkd }}</td>
+      <td style="text-align:center;">{{ s.actual_leave }}</td>
+      <td style="text-align:center;">{{ s.lop }}</td>
+      <td style="text-align:center;">{{ s.total_ph_sunday }}</td>
+      <td style="text-align:center;">{{ s.days_in_month }}</td>
+      <td style="text-align:center;">{{ s.night_duty }}</td>
+      <td><a href="{% url 'attendance:employee_attendance_view' s.user.id %}?view=monthly&year={{ year }}&month={{ month }}" class="btn btn-outline btn-sm">Details</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="20" class="empty-state">No active employees found for this filter.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

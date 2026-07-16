@@ -8,4 +8,20 @@ urlpatterns = [
     path('me/', views.my_attendance, name='my_attendance'),
     path('reports/', views.attendance_reports, name='reports'),
     path('reports/<int:user_id>/', views.employee_attendance, name='employee_attendance'),
+
+    path('active-today/', views.active_attendance_today, name='active_attendance_today'),
+
+    # Unified weekly / monthly / yearly attendance view (self-service)
+    path('me/attendance/', views.my_attendance_view, name='my_attendance_view'),
+    path('me/attendance/download/', views.download_my_attendance_view, name='download_my_attendance_view'),
+    path('me/attendance/archive/', views.my_monthly_attendance_archive, name='my_monthly_attendance_archive'),
+
+    # Unified weekly / monthly / yearly attendance view (HR/Admin viewing an employee)
+    path('employee/<int:user_id>/attendance/', views.employee_attendance_view, name='employee_attendance_view'),
+    path('employee/<int:user_id>/attendance/download/', views.download_employee_attendance_view, name='download_employee_attendance_view'),
+    path('employee/<int:user_id>/attendance/archive/', views.monthly_attendance_archive_hr, name='monthly_attendance_archive_hr'),
+
+    # Combined monthly register for ALL active employees
+    path('team/monthly/', views.team_monthly_attendance, name='team_monthly_attendance'),
+    path('team/monthly/<int:year>/<int:month>/download/', views.download_team_monthly_attendance, name='download_team_monthly_attendance'),
 ]

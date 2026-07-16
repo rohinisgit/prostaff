@@ -1,13 +1,20 @@
-from datetime import timedelta
+from datetime import date
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.http import HttpResponse
 from django.utils import timezone
 
 from core.decorators import hr_or_admin_required
 from core.models import User
-from attendance.models import AttendanceRecord
+from attendance.models import AttendanceRecord, MonthlyAttendanceSheet
+from attendance.utils import (
+    normalize_year_month, build_monthly_summary, generate_monthly_excel,
+    regenerate_and_save_monthly_sheet, build_team_monthly_summary,
+    generate_team_monthly_excel, build_weekly_summary, build_yearly_summary,
+    generate_weekly_excel, generate_yearly_excel, get_week_options,
+)
 
 
 @login_required
@@ -26,6 +33,8 @@ def punch(request):
             record.out_time = now
             record.save()
             messages.success(request, f"Punched out at {now.strftime('%I:%M %p')}")
+
+        regenerate_and_save_monthly_sheet(request.user, today.year, today.month)
         return redirect('attendance:punch')
 
     my_records = AttendanceRecord.objects.filter(user=request.user)[:30]
@@ -48,18 +57,256 @@ def attendance_reports(request):
 @hr_or_admin_required
 def employee_attendance(request, user_id):
     emp_user = get_object_or_404(User, id=user_id)
-    period = request.GET.get('period', 'weekly')
-    today = timezone.localdate()
-
     records = AttendanceRecord.objects.filter(user=emp_user)
-    if period == 'monthly':
-        records = records.filter(date__gte=today - timedelta(days=30))
-    elif period == 'yearly':
-        records = records.filter(date__gte=today - timedelta(days=365))
-    else:
-        period = 'weekly'
-        records = records.filter(date__gte=today - timedelta(days=7))
+    return render(request, 'attendance/employee_attendance.html', {'emp_user': emp_user, 'records': records})
 
-    return render(request, 'attendance/employee_attendance.html', {
-        'emp_user': emp_user, 'records': records, 'period': period,
+
+@hr_or_admin_required
+def active_attendance_today(request):
+    today = timezone.localdate()
+    active_users = User.objects.filter(profile__status='ACTIVE').exclude(
+        id=request.user.id
+    ).select_related('department', 'profile')
+
+    records = AttendanceRecord.objects.filter(date=today, user__in=active_users).select_related('user')
+    records_by_user = {r.user_id: r for r in records}
+
+    rows = []
+    for u in active_users:
+        r = records_by_user.get(u.id)
+        rows.append({
+            'user': u,
+            'in_time': r.in_time if r else None,
+            'out_time': r.out_time if r else None,
+            'total_hours': r.total_hours if r else 0,
+            'is_late': r.is_late if r else False,
+            'is_present': bool(r and r.in_time),
+        })
+    rows.sort(key=lambda row: (not row['is_present'], (row['user'].first_name or row['user'].username).lower()))
+
+    present_count = sum(1 for row in rows if row['is_present'])
+    absent_count = len(rows) - present_count
+
+    return render(request, 'attendance/active_attendance_today.html', {
+        'rows': rows, 'today': today,
+        'present_count': present_count, 'absent_count': absent_count,
+        'total_active': len(rows),
     })
+
+
+# ---------------------------------------------------------------------------
+# Unified weekly / monthly / yearly attendance view
+# ---------------------------------------------------------------------------
+def _attendance_view_params(request):
+    today = timezone.localdate()
+    view_type = request.GET.get('view', 'monthly')
+    if view_type not in ('monthly', 'weekly', 'yearly'):
+        view_type = 'monthly'
+    year = int(request.GET.get('year', today.year))
+    month = int(request.GET.get('month', today.month))
+    week = int(request.GET.get('week', 1))
+    year, month = normalize_year_month(year, month)
+    return view_type, year, month, week
+
+
+def _build_attendance_context(user, request, emp_user=None):
+    today = timezone.localdate()
+    view_type, year, month, week = _attendance_view_params(request)
+
+    context = {
+        'view_type': view_type, 'year': year, 'month': month, 'week': week,
+        'year_options': list(range(today.year - 5, today.year + 2)),
+        'month_options': [(i, date(2000, i, 1).strftime('%B')) for i in range(1, 13)],
+        'week_options': get_week_options(year, month),
+        'emp_user': emp_user,
+    }
+
+    if view_type == 'weekly':
+        context['weekly_summary'] = build_weekly_summary(user, year, month, week)
+    elif view_type == 'yearly':
+        context['yearly_summary'] = build_yearly_summary(user, year)
+    else:
+        context['view_type'] = 'monthly'
+        context['monthly_summary'] = build_monthly_summary(user, year, month)
+
+    return context
+
+
+@login_required
+def my_attendance_view(request):
+    context = _build_attendance_context(request.user, request)
+    return render(request, 'attendance/attendance_view.html', context)
+
+
+@login_required
+def download_my_attendance_view(request):
+    view_type, year, month, week = _attendance_view_params(request)
+    if view_type == 'weekly':
+        summary = build_weekly_summary(request.user, year, month, week)
+        buffer = generate_weekly_excel(summary)
+        filename = f"attendance_{request.user.username}_week{week}_{year}_{month:02d}.xlsx"
+    elif view_type == 'yearly':
+        summary = build_yearly_summary(request.user, year)
+        buffer = generate_yearly_excel(summary)
+        filename = f"attendance_{request.user.username}_{year}.xlsx"
+    else:
+        summary = build_monthly_summary(request.user, year, month)
+        buffer = generate_monthly_excel(summary)
+        filename = f"attendance_{request.user.username}_{year}_{month:02d}.xlsx"
+
+    response = HttpResponse(
+        buffer.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+def my_monthly_attendance_archive(request):
+    sheets = MonthlyAttendanceSheet.objects.filter(user=request.user)
+    return render(request, 'attendance/monthly_archive.html', {'sheets': sheets, 'emp_user': None})
+
+
+@hr_or_admin_required
+def employee_attendance_view(request, user_id):
+    emp_user = get_object_or_404(User, id=user_id)
+    context = _build_attendance_context(emp_user, request, emp_user=emp_user)
+    return render(request, 'attendance/attendance_view.html', context)
+
+
+@hr_or_admin_required
+def download_employee_attendance_view(request, user_id):
+    emp_user = get_object_or_404(User, id=user_id)
+    view_type, year, month, week = _attendance_view_params(request)
+    if view_type == 'weekly':
+        summary = build_weekly_summary(emp_user, year, month, week)
+        buffer = generate_weekly_excel(summary)
+        filename = f"attendance_{emp_user.username}_week{week}_{year}_{month:02d}.xlsx"
+    elif view_type == 'yearly':
+        summary = build_yearly_summary(emp_user, year)
+        buffer = generate_yearly_excel(summary)
+        filename = f"attendance_{emp_user.username}_{year}.xlsx"
+    else:
+        summary = build_monthly_summary(emp_user, year, month)
+        buffer = generate_monthly_excel(summary)
+        filename = f"attendance_{emp_user.username}_{year}_{month:02d}.xlsx"
+
+    response = HttpResponse(
+        buffer.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@hr_or_admin_required
+def monthly_attendance_archive_hr(request, user_id):
+    emp_user = get_object_or_404(User, id=user_id)
+    sheets = MonthlyAttendanceSheet.objects.filter(user=emp_user)
+    return render(request, 'attendance/monthly_archive.html', {'sheets': sheets, 'emp_user': emp_user})
+
+
+# ---------------------------------------------------------------------------
+# Combined monthly register for ALL active employees
+# ---------------------------------------------------------------------------
+@hr_or_admin_required
+def team_monthly_attendance(request):
+    from django.db.models import Q
+    today = timezone.localdate()
+    year = int(request.GET.get('year', today.year))
+    month = int(request.GET.get('month', today.month))
+    year, month = normalize_year_month(year, month)
+
+    query = request.GET.get('q', '').strip()
+    role_filter = request.GET.get('role', '')
+    department_filter = request.GET.get('department', '')
+
+    active_users = User.objects.filter(profile__status='ACTIVE').exclude(
+        id=request.user.id
+    ).select_related('department', 'profile')
+
+    if query:
+        active_users = active_users.filter(
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(username__icontains=query) |
+            Q(employee_id__icontains=query)
+        )
+    if role_filter:
+        active_users = active_users.filter(role=role_filter)
+    if department_filter:
+        if department_filter == 'No Department':
+            active_users = active_users.filter(department__isnull=True)
+        else:
+            active_users = active_users.filter(department__name=department_filter)
+
+    active_users = active_users.order_by('first_name', 'username')
+    summaries = build_team_monthly_summary(active_users, year, month)
+
+    all_departments = sorted({
+        u.department.name for u in User.objects.filter(profile__status='ACTIVE')
+        .select_related('department') if u.department
+    })
+    has_no_dept = User.objects.filter(profile__status='ACTIVE', department__isnull=True).exists()
+    department_options = all_departments + (['No Department'] if has_no_dept else [])
+    role_options = [('EMPLOYEE', 'Employee'), ('MANAGER', 'Manager'), ('HR', 'HR'), ('ADMIN', 'Admin')]
+
+    current_year = today.year
+    year_options = list(range(current_year - 5, current_year + 2))
+    month_options = [(i, date(2000, i, 1).strftime('%B')) for i in range(1, 13)]
+
+    return render(request, 'attendance/team_monthly_attendance.html', {
+        'summaries': summaries,
+        'year': year, 'month': month,
+        'month_name': summaries[0]['month_name'] if summaries else date(year, month, 1).strftime('%B %Y'),
+        'day_labels': [d['day_label'] for d in summaries[0]['daily_rows']] if summaries else [],
+        'total_active': len(summaries),
+        'year_options': year_options,
+        'month_options': month_options,
+        'department_options': department_options,
+        'role_options': role_options,
+        'query': query,
+        'selected_role': role_filter,
+        'selected_department': department_filter,
+    })
+
+
+@hr_or_admin_required
+def download_team_monthly_attendance(request, year, month):
+    from django.db.models import Q
+    year, month = normalize_year_month(year, month)
+
+    query = request.GET.get('q', '').strip()
+    role_filter = request.GET.get('role', '')
+    department_filter = request.GET.get('department', '')
+
+    active_users = User.objects.filter(profile__status='ACTIVE').exclude(
+        id=request.user.id
+    ).select_related('department', 'profile')
+
+    if query:
+        active_users = active_users.filter(
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(username__icontains=query) |
+            Q(employee_id__icontains=query)
+        )
+    if role_filter:
+        active_users = active_users.filter(role=role_filter)
+    if department_filter:
+        if department_filter == 'No Department':
+            active_users = active_users.filter(department__isnull=True)
+        else:
+            active_users = active_users.filter(department__name=department_filter)
+
+    active_users = active_users.order_by('first_name', 'username')
+    summaries = build_team_monthly_summary(active_users, year, month)
+    buffer = generate_team_monthly_excel(summaries, year, month)
+    filename = f"team_attendance_{year}_{month:02d}.xlsx"
+    response = HttpResponse(
+        buffer.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response

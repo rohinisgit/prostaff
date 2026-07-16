@@ -6,7 +6,9 @@
     <h1>Welcome, {{ user.get_full_name|default:user.username }}</h1>
     <p>Here's what's happening today.</p>
   </div>
-  {% if user.role != 'ADMIN' %}
+  {% if user.role == 'HR' %}
+  <a href="{% url 'attendance:active_attendance_today' %}" class="btn btn-accent">Go to Attendance</a>
+  {% elif user.role != 'ADMIN' %}
   <a href="{% url 'attendance:punch' %}" class="btn btn-accent">Go to Attendance</a>
   {% endif %}
 </div>
@@ -29,13 +31,19 @@
 <div class="stat-grid">
   <div class="stat-card"><div class="stat-value">{{ total_employees }}</div><div class="stat-label">Total Employees</div></div>
   <div class="stat-card"><div class="stat-value">{{ active_employees }}</div><div class="stat-label">Active</div></div>
+  <div class="stat-card"><div class="stat-value">{{ inactive_employees }}</div><div class="stat-label">Inactive</div></div>
+  <div class="stat-card"><div class="stat-value">{{ exited_employees }}</div><div class="stat-label">Exited</div></div>
+</div>
+<div class="stat-grid">
+  <div class="stat-card"><div class="stat-value">{{ present_today }}</div><div class="stat-label">Present Today</div></div>
+  <div class="stat-card orange"><div class="stat-value">{{ absent_today }}</div><div class="stat-label">Absent Today</div></div>
+  <div class="stat-card"><div class="stat-value">{{ on_leave_today }}</div><div class="stat-label">On Leave (With Permission)</div></div>
 </div>
 <div class="card">
   <h3>Quick Actions</h3>
   <div class="punch-btns" style="justify-content:flex-start; flex-wrap:wrap;">
     <a href="{% url 'employees:onboard' %}" class="btn btn-primary">Onboard Employee</a>
     <a href="{% url 'employees:directory' %}" class="btn btn-outline">Employee Directory</a>
-
     <a href="{% url 'leaves:approvals' %}" class="btn btn-outline">Review Leave Requests</a>
     <a href="{% url 'payroll:runs' %}" class="btn btn-outline">Payroll Runs</a>
     <a href="{% url 'increments:create' %}" class="btn btn-outline">New Increment</a>

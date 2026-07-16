@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
 from django.utils import timezone
+from increments.models import IncrementRequest
 
 from core.decorators import hr_or_admin_required, hr_only_required
 from core.models import User
@@ -14,6 +15,9 @@ from employees.forms import (
 )
 from payroll.models import SalaryStructure
 from payroll.forms import SalaryStructureForm
+from django.urls import reverse
+from payroll.models import SalaryStructure
+from increments.models import IncrementRequest
 
 
 def _present_user_ids_today():
@@ -217,11 +221,6 @@ def employee_directory(request):
     if request.user.role == 'HR':
         employees = employees.exclude(role__in=['HR', 'ADMIN'])
 
-    # Onboarding employees are hidden by default — HR sees them only by
-    # explicitly filtering the Status dropdown to "Onboarding".
-    if status_filter != 'ONBOARDING':
-        employees = employees.exclude(profile__status='ONBOARDING')
-
     if query:
         employees = employees.filter(
             Q(first_name__icontains=query) |
@@ -251,12 +250,13 @@ def employee_directory(request):
     employee_rows = []
     for emp in employees:
         profile = getattr(emp, 'profile', None)
-        if profile and profile.status == 'ONBOARDING':
-            emp_status = 'ONBOARDING'
-        elif profile and profile.status == 'EXITED':
+        if profile and profile.status == 'EXITED':
             emp_status = 'EXITED'
+        elif profile and profile.status == 'ONBOARDING':
+            emp_status = 'ONBOARD'
         else:
             emp_status = 'ACTIVE'
+
         if status_filter and status_filter != emp_status:
             continue
         emp.display_status = emp_status
@@ -274,12 +274,12 @@ def employee_directory(request):
         'selected_department': department_filter,
         'selected_status': status_filter,
     })
-
-
 @hr_or_admin_required
 def employee_detail(request, user_id):
-    """Read-only view. All editing (profile, status, role, salary,
-    documents) happens on the Edit page, reached via the button here."""
+    """HR/Admin view. Read-only by default. HR can toggle Edit mode
+    (?edit=1) to change status, jump to Salary edit, give a new Increment,
+    and upload official documents. Admin never sees the Edit button —
+    Admin stays view-only everywhere, as before."""
     emp_user = get_object_or_404(User, id=user_id)
 
     if request.user.role == 'HR' and emp_user.role == 'ADMIN':
@@ -288,14 +288,44 @@ def employee_detail(request, user_id):
 
     profile, _ = EmployeeProfile.objects.get_or_create(user=emp_user)
     documents = emp_user.documents.all()
+    doc_form = HRDocumentForm()
+    role_form = RoleChangeForm(instance=emp_user, acting_user=request.user)
     latest_resignation = ResignationRequest.objects.filter(user=emp_user).first()
+
     salary_structure = SalaryStructure.objects.filter(user=emp_user).first()
 
+    increments_qs = IncrementRequest.objects.filter(user=emp_user, status='APPROVED').order_by('-effective_date')
+    increment_count = increments_qs.count()
+    latest_increment = increments_qs.first()
+
+    edit_mode = request.user.role == 'HR' and request.GET.get('edit') == '1'
+
     return render(request, 'employees/employee_detail.html', {
-        'emp_user': emp_user, 'profile': profile, 'documents': documents,
-        'latest_resignation': latest_resignation, 'salary_structure': salary_structure,
+        'emp_user': emp_user, 'profile': profile, 'documents': documents, 'doc_form': doc_form,
+        'role_form': role_form, 'latest_resignation': latest_resignation,
+        'salary_structure': salary_structure,
+        'increment_count': increment_count, 'latest_increment': latest_increment,
+        'edit_mode': edit_mode,
     })
 
+
+@hr_only_required
+def update_employee_status(request, user_id):
+    """HR can directly set an employee's status (Active / Onboard / Exited)
+    from the Edit-mode panel on the employee detail page."""
+    emp_user = get_object_or_404(User, id=user_id)
+    profile, _ = EmployeeProfile.objects.get_or_create(user=emp_user)
+
+    if request.method == 'POST':
+        new_status = request.POST.get('status')
+        if new_status in dict(EmployeeProfile.STATUS_CHOICES):
+            profile.status = new_status
+            profile.save()
+            messages.success(request, f"{emp_user}'s status updated to {profile.get_status_display()}.")
+        else:
+            messages.error(request, "Invalid status selected.")
+
+    return redirect(f"{reverse('employees:employee_detail', args=[emp_user.id])}?edit=1")
 
 @hr_only_required
 def upload_document(request, user_id):

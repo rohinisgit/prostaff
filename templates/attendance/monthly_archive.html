@@ -1,0 +1,24 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>{% if emp_user %}{{ emp_user.get_full_name|default:emp_user.username }} — {% endif %}Attendance Archive</h1></div>
+<div class="card">
+  <table>
+    <tr><th>Month</th><th>Last Generated</th><th></th></tr>
+    {% for s in sheets %}
+    <tr>
+      <td>{{ s.year }}-{{ s.month|stringformat:"02d" }}</td>
+      <td>{{ s.generated_at|date:"d M Y, h:i A" }}</td>
+      <td>
+        {% if emp_user %}
+        <a href="{% url 'attendance:monthly_attendance_hr' emp_user.id s.year s.month %}" class="btn btn-outline btn-sm">View</a>
+        <a href="{% url 'attendance:download_employee_monthly_attendance' emp_user.id s.year s.month %}" class="btn btn-accent btn-sm">Download</a>
+        {% else %}
+        <a href="{% url 'attendance:my_monthly_attendance' s.year s.month %}" class="btn btn-outline btn-sm">View</a>
+        <a href="{% url 'attendance:download_my_monthly_attendance' s.year s.month %}" class="btn btn-accent btn-sm">Download</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}<tr><td colspan="3" class="empty-state">No monthly sheets generated yet.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}
