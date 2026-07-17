@@ -2,6 +2,7 @@ from decimal import Decimal
 from django.db.models import Sum
 from attendance.models import AttendanceRecord
 from payroll.models import SalaryStructure, Payslip
+from attendance.utils import compute_authorized_hours_for_range
 
 STANDARD_DAILY_HOURS = Decimal('8')
 
@@ -21,8 +22,8 @@ def compute_payslip_for_user(user, payroll_run):
         user=user, date__gte=payroll_run.start_date, date__lte=payroll_run.end_date
     )
     days_present = attendance.exclude(in_time__isnull=True).count()
-    total_hours_worked = attendance.aggregate(total=Sum('total_hours'))['total'] or Decimal('0.00')
-    total_hours_worked = Decimal(total_hours_worked)
+    
+    total_hours_worked = compute_authorized_hours_for_range(user, payroll_run.start_date, payroll_run.end_date)
 
     total_days_in_cycle = (payroll_run.end_date - payroll_run.start_date).days + 1
     gross = structure.gross

@@ -1,9 +1,5 @@
 import calendar
 import io
-from datetime import date
-from decimal import Decimal
-import calendar
-import io
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -12,7 +8,12 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from django.core.files.base import ContentFile
 
-from attendance.models import AttendanceRecord, MonthlyAttendanceSheet
+from attendance.models import AttendanceRecord, MonthlyAttendanceSheet, OvertimePermission
+
+
+STANDARD_DAILY_HOURS_CAP = Decimal('8.00')
+
+
 def normalize_year_month(year, month):
     """Wraps month overflow/underflow into the correct year, e.g. month=13 -> next Jan."""
     year, month = int(year), int(month)
@@ -33,6 +34,53 @@ def get_cl_quota(user):
     return 1
 
 
+def _permissions_map(user, first_day, last_day):
+    """date -> OvertimePermission for this user within the range."""
+    perms = OvertimePermission.objects.filter(
+        employee=user, date__gte=first_day, date__lte=last_day
+    ).select_related('project')
+    return {p.date: p for p in perms}
+
+
+def _authorized_hours(record, is_sunday, permission):
+    """Returns (counted_hours, was_capped).
+
+    - Sunday hours only count if a permission with covers_sunday() exists
+      for that date; otherwise they're excluded entirely (0).
+    - Weekday hours beyond STANDARD_DAILY_HOURS_CAP only count if a
+      permission with covers_overtime() exists; otherwise they're capped
+      at the standard 8 hours.
+    """
+    if not record or not record.total_hours:
+        return Decimal('0.00'), False
+
+    raw = record.total_hours
+
+    if is_sunday:
+        if permission and permission.covers_sunday():
+            return raw, False
+        return Decimal('0.00'), raw > 0
+
+    if raw > STANDARD_DAILY_HOURS_CAP:
+        if permission and permission.covers_overtime():
+            return raw, False
+        return STANDARD_DAILY_HOURS_CAP, True
+
+    return raw, False
+
+
+def compute_authorized_hours_for_range(user, start_date, end_date):
+    """Used by payroll — total worked hours after stripping unauthorized
+    Sunday work and unauthorized overtime."""
+    records = AttendanceRecord.objects.filter(user=user, date__gte=start_date, date__lte=end_date)
+    permissions = _permissions_map(user, start_date, end_date)
+    total = Decimal('0.00')
+    for r in records:
+        hours, _ = _authorized_hours(r, r.date.weekday() == 6, permissions.get(r.date))
+        total += hours
+    return total
+
+
 def build_monthly_summary(user, year, month):
     """Builds the full monthly attendance summary dict for one employee."""
     year, month = normalize_year_month(year, month)
@@ -42,6 +90,7 @@ def build_monthly_summary(user, year, month):
 
     records = AttendanceRecord.objects.filter(user=user, date__gte=first_day, date__lte=last_day)
     records_by_date = {r.date: r for r in records}
+    permissions_by_date = _permissions_map(user, first_day, last_day)
 
     daily_rows = []
     sundays = 0
@@ -58,7 +107,8 @@ def build_monthly_summary(user, year, month):
             sundays += 1
 
         record = records_by_date.get(current_date)
-        hours = record.total_hours if record and record.total_hours else Decimal('0.00')
+        permission = permissions_by_date.get(current_date)
+        hours, was_capped = _authorized_hours(record, is_sunday, permission)
         attended = bool(record and record.in_time)
 
         if attended:
@@ -78,6 +128,8 @@ def build_monthly_summary(user, year, month):
             'day_label': current_date.strftime('%d %b'),
             'is_sunday': is_sunday,
             'hours': hours,
+            'was_capped': was_capped,
+            'permission': permission,
             'in_time': record.in_time if record else None,
             'out_time': record.out_time if record else None,
             'attended': attended,
@@ -232,6 +284,7 @@ def regenerate_and_save_monthly_sheet(user, year, month):
     sheet.excel_file.save(filename, ContentFile(buffer.read()), save=True)
     return sheet
 
+
 def build_team_monthly_summary(users, year, month):
     """Builds the monthly summary for every user in `users`, for the same
     month. Returns a list of summary dicts (same shape as
@@ -288,6 +341,81 @@ def generate_team_monthly_excel(summaries, year, month):
 
     day_start_col = col
     day_labels = [d['day_label'] for d in summaries[0]['daily_rows']]
+    for label in day_labels:
+        c = ws.cell(row=header_row, column=col, value=label)
+        c.font = header_font
+        c.fill = header_fill
+        c.alignment = center
+        c.border = border
+        col += 1
+    day_end_col = col
+
+    summary_headers = [
+        'Total Days Worked', 'CL', 'On Duty', 'Sunday Hours', 'Total Hours',
+        'WKD (Excl. Sunday)', 'Actual Leave', 'LOP', 'Total (PH/Sunday)',
+        'Total Days in Month', 'Night Duty',
+    ]
+    summary_start_col = col
+    for h in summary_headers:
+        c = ws.cell(row=header_row, column=col, value=h)
+        c.font = header_font
+        c.fill = header_fill
+        c.alignment = center
+        c.border = border
+        col += 1
+    summary_end_col = col
+
+    row = header_row + 1
+    for summary in summaries:
+        user = summary['user']
+        col = 1
+        c = ws.cell(row=row, column=col, value=user.get_full_name() or user.username); c.border = border
+        col += 1
+        c = ws.cell(row=row, column=col, value=user.employee_id or '-'); c.border = border
+        col += 1
+        c = ws.cell(row=row, column=col, value=user.get_role_display()); c.border = border
+        col += 1
+        c = ws.cell(row=row, column=col, value=str(user.department) if user.department else '-'); c.border = border
+        col += 1
+
+        for day in summary['daily_rows']:
+            val = float(day['hours']) if day['hours'] else 0
+            c = ws.cell(row=row, column=col, value=val)
+            c.alignment = center
+            c.border = border
+            if day['is_sunday']:
+                c.fill = sunday_fill
+            col += 1
+
+        summary_values = [
+            summary['total_days_worked'], summary['cl_quota'], summary['on_duty'],
+            float(summary['sunday_hours']), float(summary['total_hours_worked']),
+            summary['wkd'], summary['actual_leave'], summary['lop'],
+            summary['total_ph_sunday'], summary['days_in_month'], summary['night_duty'],
+        ]
+        for v in summary_values:
+            c = ws.cell(row=row, column=col, value=v)
+            c.alignment = center
+            c.border = border
+            col += 1
+        row += 1
+
+    ws.column_dimensions['A'].width = 24
+    ws.column_dimensions['B'].width = 14
+    ws.column_dimensions['C'].width = 14
+    ws.column_dimensions['D'].width = 18
+    for i in range(day_start_col, day_end_col):
+        ws.column_dimensions[get_column_letter(i)].width = 9
+    for i in range(summary_start_col, summary_end_col):
+        ws.column_dimensions[get_column_letter(i)].width = 16
+
+    ws.freeze_panes = ws.cell(row=header_row + 1, column=day_start_col)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
 
 def get_week_options(year, month):
     """List of (week_number, label) for the week dropdown, splitting the
@@ -321,6 +449,7 @@ def build_weekly_summary(user, year, month, week_number):
 
     records = AttendanceRecord.objects.filter(user=user, date__gte=first_day, date__lte=last_day)
     records_by_date = {r.date: r for r in records}
+    permissions_by_date = _permissions_map(user, first_day, last_day)
 
     daily_rows = []
     total_hours = Decimal('0.00')
@@ -334,7 +463,8 @@ def build_weekly_summary(user, year, month, week_number):
         if is_sunday:
             sundays += 1
         record = records_by_date.get(current)
-        hours = record.total_hours if record and record.total_hours else Decimal('0.00')
+        permission = permissions_by_date.get(current)
+        hours, was_capped = _authorized_hours(record, is_sunday, permission)
         attended = bool(record and record.in_time)
         if attended:
             days_worked += 1
@@ -346,6 +476,7 @@ def build_weekly_summary(user, year, month, week_number):
             'day_label': current.strftime('%d %b (%a)'),
             'is_sunday': is_sunday,
             'hours': hours,
+            'was_capped': was_capped,
             'in_time': record.in_time if record else None,
             'out_time': record.out_time if record else None,
             'attended': attended,

@@ -484,3 +484,17 @@ def team_member_detail(request, user_id):
         'emp_user': emp_user, 'profile': profile, 'records': records,
         'is_onboarding': is_onboarding, 'is_present_today': is_present_today,
     })
+
+@login_required
+def my_resignation(request):
+    if not _can_apply_resignation(request.user):
+        messages.error(request, "You do not have permission to view this page.")
+        return redirect('core:dashboard')
+
+    resignations = ResignationRequest.objects.filter(user=request.user).order_by('-submitted_at')
+    pending_resignation = resignations.filter(status__in=['PENDING', 'NEGOTIATING']).first()
+
+    return render(request, 'employees/my_resignation.html', {
+        'resignations': resignations,
+        'pending_resignation': pending_resignation,
+    })

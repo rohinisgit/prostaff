@@ -25,4 +25,5 @@ urlpatterns = [
     path('my-department/', views.my_department, name='my_department'),
     path('<int:user_id>/team-member/', views.team_member_detail, name='team_member_detail'),
     path('<int:user_id>/update-status/', views.update_employee_status, name='update_employee_status'),
+    path('resignation/mine/', views.my_resignation, name='my_resignation'),
 ]

@@ -1,0 +1,68 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header">
+  <h1>My Resignation</h1>
+  {% if pending_resignation.status == 'PENDING' %}
+  <span class="badge badge-warning">Pending HR Review</span>
+  {% elif pending_resignation.status == 'NEGOTIATING' %}
+  <span class="badge badge-info">HR Has Sent You an Offer — See Below</span>
+  {% endif %}
+</div>
+
+{% if pending_resignation.status == 'NEGOTIATING' %}
+<div class="card">
+  <h3>A Message From HR</h3>
+  <div style="padding:14px; background:var(--grey-50); border-radius:8px; margin-bottom:14px;">
+    <p style="margin:0;">{{ pending_resignation.hr_message }}</p>
+    <p style="margin:8px 0 0; font-size:0.75rem; color:var(--grey-500);">— {{ pending_resignation.hr_message_by|default:"HR" }}, {{ pending_resignation.hr_message_at|date:"d M Y, h:i A" }}</p>
+  </div>
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <form method="post" action="{% url 'employees:accept_resignation_offer' pending_resignation.id %}" style="margin:0;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">Accept Offer &amp; Stay</button>
+    </form>
+    <button type="button" class="btn btn-danger" onclick="document.getElementById('quit-panel').classList.toggle('open-panel')">I'd Still Like to Quit</button>
+  </div>
+
+  <div id="quit-panel" class="negotiate-panel">
+    <form method="post" action="{% url 'employees:quit_after_negotiation' pending_resignation.id %}" style="margin-top:14px;">
+      {% csrf_token %}
+      <label>Message to HR (optional)</label>
+      <textarea name="message" class="form-control" rows="3" placeholder="Let HR know your final decision..."></textarea>
+      <button type="submit" class="btn btn-danger">Confirm — I Want to Quit</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if pending_resignation.status == 'PENDING' and pending_resignation.employee_reply %}
+<div class="card">
+  <p style="margin:0; color:var(--grey-700); font-size:0.85rem;">You declined HR's earlier offer and asked to proceed. HR is now allotting your notice period.</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>History</h3>
+  <table>
+    <tr><th>Submitted</th><th>Reason</th><th>Status</th><th>Notice Period</th><th>Exit Date</th></tr>
+    {% for r in resignations %}
+    <tr>
+      <td>{{ r.submitted_at|date:"d M Y" }}</td>
+      <td>{{ r.reason|truncatewords:12 }}</td>
+      <td>
+        {% if r.status == 'PENDING' %}<span class="badge badge-warning">Pending HR Review</span>
+        {% elif r.status == 'NEGOTIATING' %}<span class="badge badge-info">Offer Sent</span>
+        {% elif r.status == 'ACCEPTED' %}<span class="badge badge-danger">Approved — Exiting</span>
+        {% elif r.status == 'REJECTED' %}<span class="badge badge-danger">Rejected</span>
+        {% elif r.status == 'WITHDRAWN' %}<span class="badge badge-success">Withdrawn</span>{% endif %}
+      </td>
+      <td>{{ r.notice_period_days|default:"-" }}</td>
+      <td>{{ r.exit_date|default:"-" }}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty-state">No resignation requests found.</td></tr>{% endfor %}
+  </table>
+</div>
+
+<a href="{% url 'employees:my_profile' %}" class="btn btn-outline">&larr; Back to My Profile</a>
+{% endblock %}

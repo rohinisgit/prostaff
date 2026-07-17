@@ -22,6 +22,7 @@
 <div class="card">
   <p>{{ project.description|default:"No description provided." }}</p>
   <p>
+    <p><strong>Created by (Manager):</strong> {{ project.manager|default:project.created_by|default:"Unknown" }}</p>
     <strong>Lead:</strong> {{ project.lead|default:"Unassigned" }} &nbsp;|&nbsp;
     <strong>Dates:</strong> {{ project.start_date|default:"-" }} to {{ project.end_date|default:"-" }}
   </p>

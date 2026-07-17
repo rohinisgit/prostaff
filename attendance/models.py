@@ -84,3 +84,43 @@ class MonthlyAttendanceSheet(models.Model):
 
     def __str__(self):
         return f"Monthly sheet - {self.user} ({self.year}-{self.month:02d})"
+
+class OvertimePermission(models.Model):
+    """Granted by HR, or by the Manager/Lead of a specific project, to let
+    one employee's Sunday work and/or overtime (hours beyond the standard
+    8/day) actually count for that date. Without a matching permission,
+    those hours are excluded everywhere — daily rows, monthly/weekly/yearly
+    summaries, team register, and payroll."""
+
+    TYPE_OVERTIME = 'OVERTIME'
+    TYPE_SUNDAY = 'SUNDAY'
+    TYPE_BOTH = 'BOTH'
+    TYPE_CHOICES = [
+        (TYPE_OVERTIME, 'Overtime (extra hours on a working day)'),
+        (TYPE_SUNDAY, 'Sunday Work'),
+        (TYPE_BOTH, 'Overtime + Sunday Work'),
+    ]
+
+    employee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='overtime_permissions')
+    project = models.ForeignKey('projects.Project', on_delete=models.CASCADE, related_name='overtime_permissions')
+    date = models.DateField()
+    permission_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default=TYPE_BOTH)
+    notes = models.CharField(max_length=255, blank=True)
+
+    authorized_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name='overtime_permissions_granted'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('employee', 'project', 'date')
+        ordering = ['-date']
+
+    def covers_sunday(self):
+        return self.permission_type in (self.TYPE_SUNDAY, self.TYPE_BOTH)
+
+    def covers_overtime(self):
+        return self.permission_type in (self.TYPE_OVERTIME, self.TYPE_BOTH)
+
+    def __str__(self):
+        return f"{self.employee} — {self.project} — {self.date} ({self.get_permission_type_display()})"
