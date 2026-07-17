@@ -27,7 +27,7 @@
           <span class="badge badge-danger">Absent</span>
         {% endif %}
       </td>
-      <td><a href="{% url 'attendance:monthly_attendance_hr' row.user.id %}" class="btn btn-outline btn-sm">Monthly Sheet</a></td>
+      <td><a href="{% url 'attendance:employee_attendance_view' row.user.id %}" class="btn btn-outline btn-sm">Monthly Sheet</a></td>
     </tr>
     {% empty %}<tr><td colspan="6" class="empty-state">No active employees found.</td></tr>{% endfor %}
   </table>
