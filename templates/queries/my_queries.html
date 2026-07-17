@@ -1,0 +1,95 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>Ask a Query</h1></div>
+
+<div class="card">
+  {% if form.errors %}
+  <ul class="messages"><li class="error">Please fix the highlighted fields below.</li></ul>
+  {% endif %}
+  <form method="post" id="query-form">
+    {% csrf_token %}
+    <label>Send To (Role)</label>
+    <select name="recipient_role" id="recipient-role-select" class="form-control">
+      <option value="">-- Select Role --</option>
+      <option value="HR">HR</option>
+      <option value="ADMIN">Admin</option>
+      <option value="MANAGER">Manager</option>
+    </select>
+
+    <label style="margin-top:14px;">Send To (Person)</label>
+    <select name="recipient_user" id="recipient-user-select" class="form-control">
+      <option value="">-- Select a role first --</option>
+    </select>
+    {% if form.recipient_user.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.recipient_user.errors.0 }}</p>{% endif %}
+
+    <label style="margin-top:14px;">Your Message</label>
+    {{ form.message }}
+    <button type="submit" class="btn btn-primary" style="margin-top:10px;">Submit Query</button>
+  </form>
+
+  {{ users_by_role|json_script:"users-by-role-data" }}
+  <script>
+    (function () {
+      var USERS_BY_ROLE = JSON.parse(document.getElementById('users-by-role-data').textContent);
+      var roleSelect = document.getElementById('recipient-role-select');
+      var userSelect = document.getElementById('recipient-user-select');
+
+      function populateUsers() {
+        var role = roleSelect.value;
+        userSelect.innerHTML = '';
+        var users = role ? USERS_BY_ROLE[role] : [];
+        if (!role) {
+          var ph = document.createElement('option');
+          ph.value = ''; ph.textContent = '-- Select a role first --';
+          userSelect.appendChild(ph);
+          return;
+        }
+        if (users.length === 0) {
+          var none = document.createElement('option');
+          none.value = ''; none.textContent = 'No ' + role + ' users available';
+          userSelect.appendChild(none);
+          return;
+        }
+        var placeholder = document.createElement('option');
+        placeholder.value = ''; placeholder.textContent = '-- Select a person --';
+        userSelect.appendChild(placeholder);
+        users.forEach(function (u) {
+          var opt = document.createElement('option');
+          opt.value = u.id; opt.textContent = u.display;
+          userSelect.appendChild(opt);
+        });
+      }
+
+      roleSelect.addEventListener('change', populateUsers);
+      populateUsers();
+    })();
+  </script>
+</div>
+
+<div class="card">
+  <h3>My Queries</h3>
+  <table>
+    <tr><th>Sent To</th><th>Message</th><th>Submitted</th><th>Status</th><th></th></tr>
+    {% for q in my_queries %}
+    <tr>
+      <td>{{ q.recipient_user.get_full_name|default:q.recipient_user.username }} <span class="badge badge-info">{{ q.get_recipient_role_display }}</span></td>
+      <td>{{ q.message|truncatewords:12 }}</td>
+      <td>{{ q.created_at|date:"d M Y, h:i A" }}</td>
+      <td>
+        {% if q.status == 'OPEN' %}<span class="badge badge-warning">Open</span>
+        {% else %}<span class="badge badge-success">Resolved</span>{% endif %}
+      </td>
+      <td>
+        <a href="{% url 'queries:query_thread' q.id %}" class="btn btn-primary btn-sm">Open</a>
+        <form method="post" action="{% url 'queries:delete_query' q.id %}" style="display:inline;" onsubmit="return confirm('Delete this query?');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="empty-state">You haven't raised any queries yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

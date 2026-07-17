@@ -1,0 +1,37 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>{{ page_title }}</h1></div>
+
+<div class="card">
+  <form method="get" style="display:flex; gap:12px; align-items:end; margin-bottom:0;">
+    <div style="min-width:220px;">
+      <label>Status</label>
+      <select name="status" class="form-control" style="margin-bottom:0;" onchange="this.form.submit()">
+        <option value="">All</option>
+        <option value="OPEN" {% if selected_status == 'OPEN' %}selected{% endif %}>Open</option>
+        <option value="CLOSED" {% if selected_status == 'CLOSED' %}selected{% endif %}>Resolved</option>
+      </select>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <table>
+    <tr><th>Employee</th><th>Message</th><th>Submitted</th><th>Status</th><th></th></tr>
+    {% for q in queries %}
+    <tr>
+      <td>{{ q.user.get_full_name|default:q.user.username }}</td>
+      <td>{{ q.message|truncatewords:15 }}</td>
+      <td>{{ q.created_at|date:"d M Y, h:i A" }}</td>
+      <td>
+        {% if q.status == 'OPEN' %}<span class="badge badge-warning">Open</span>
+        {% else %}<span class="badge badge-success">Resolved</span>{% endif %}
+      </td>
+      <td>
+        <a href="{% url 'queries:query_thread' q.id %}" class="btn btn-primary btn-sm">Open</a>
+      </td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty-state">No queries here right now.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

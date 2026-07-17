@@ -1,7 +1,12 @@
 {% extends 'core/base.html' %}
 {% block content %}
 <div class="page-header">
-  <h1>My Profile</h1>
+  <h1 style="display:flex; align-items:center; gap:12px;">
+    {% if profile.profile_photo %}
+    <img src="{{ profile.profile_photo.url }}" alt="" style="width:44px; height:44px; border-radius:50%; object-fit:cover;">
+    {% endif %}
+    My Profile
+  </h1>
   {% if can_apply_resignation %}
     {% if pending_resignation.status == 'PENDING' %}
     <span class="badge badge-warning">Resignation Pending HR Review</span>
