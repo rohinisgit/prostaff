@@ -76,7 +76,9 @@ def payroll_runs(request):
     not-yet-credited ones for the selected month."""
     role_labels = {'ADMIN': 'Admin', 'MANAGER': 'Manager', 'EMPLOYEE': 'Employee', 'HR': 'HR'}
 
-    all_users = User.objects.exclude(id=request.user.id).select_related('department')
+    all_users = User.objects.exclude(id=request.user.id).select_related('department', 'profile').filter(
+    profile__status='ACTIVE'
+)
     months = _recent_months(timezone.localdate())
 
     released_payslips = Payslip.objects.filter(

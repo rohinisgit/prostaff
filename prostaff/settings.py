@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'increments',
     'projects',
     'leaves',
+    'queries',
 ]
 
 MIDDLEWARE = [

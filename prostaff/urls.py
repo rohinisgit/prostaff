@@ -12,6 +12,7 @@ urlpatterns = [
     path('increments/', include('increments.urls')),
     path('projects/', include('projects.urls')),
     path('leaves/', include('leaves.urls')),
+    path('queries/', include('queries.urls')),
 ]
 
 if settings.DEBUG:
