@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page-header">
   <h1>{{ emp_user.get_full_name|default:emp_user.username }} — Increment History</h1>
-  <a href="{% url 'increments:list' %}" class="btn btn-outline btn-sm">&larr; Back to Increments</a>
+  <a href="{% url 'increments:list' %}" class="btn btn-outline btn-sm" style = "background-color:red;color:white">&larr; Back to Increments</a>
 </div>
 
 {% for i in increments %}
@@ -48,6 +48,4 @@
 {% empty %}
 <div class="card"><p class="empty-state">No finalized increments for this employee yet.</p></div>
 {% endfor %}
-
-<a href="{% url 'increments:list' %}" class="btn btn-outline">&larr; Back to Increments</a>
 {% endblock %}

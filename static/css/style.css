@@ -149,6 +149,29 @@ tr:hover td { background: var(--grey-50); }
 .login-card h1 { margin: 0 0 6px; font-size: 1.4rem; }
 .login-card p.subtitle { color: var(--grey-700); margin: 0 0 24px; font-size: 0.9rem; }
 .login-accent { height: 4px; width: 48px; background: var(--sunset-orange); border-radius: 4px; margin-bottom: 18px; }
+.password-field-wrap {
+  position: relative;
+}
+.password-field-wrap .form-control {
+  padding-right: 42px;
+}
+.password-toggle-btn {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  margin-top: -7px; /* offsets the form-control's bottom margin so it centers on the input itself */
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--grey-500);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+}
+.password-toggle-btn:hover {
+  color: var(--grey-700);
+}
 
 /* ---------- Messages ---------- */
 .messages { list-style: none; padding: 0; margin: 0 0 18px; }
