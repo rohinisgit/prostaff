@@ -15,7 +15,9 @@ from attendance.utils import (
     generate_team_monthly_excel, build_weekly_summary, build_yearly_summary,
     generate_weekly_excel, generate_yearly_excel, get_week_options,
 )
-
+from django.db.models import Q
+from attendance.models import AttendanceRecord, MonthlyAttendanceSheet, OvertimePermission
+from projects.models import Project
 
 @login_required
 def punch(request):
@@ -310,3 +312,109 @@ def download_team_monthly_attendance(request, year, month):
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+def _overtime_manageable_projects(user):
+    """HR sees every project. A Manager only sees projects they created
+    (manager) or lead."""
+    qs = Project.objects.filter(status__in=['APPROVED', 'COMPLETED'])
+    if user.role == 'HR':
+        return qs
+    if user.is_manager():
+        return qs.filter(Q(manager=user) | Q(lead=user)).distinct()
+    return qs.none()
+
+
+@login_required
+def overtime_permissions(request):
+    if not (request.user.role == 'HR' or request.user.is_manager()):
+        messages.error(request, "You do not have permission to view this page.")
+        return redirect('core:dashboard')
+
+    projects = _overtime_manageable_projects(request.user)
+
+    if request.method == 'POST':
+        project = projects.filter(id=request.POST.get('project')).first()
+        employee_id = request.POST.get('employee')
+        perm_date = request.POST.get('date')
+        permission_type = request.POST.get('permission_type', OvertimePermission.TYPE_BOTH)
+
+        if not project:
+            messages.error(request, "You cannot grant overtime for that project.")
+            return redirect('attendance:overtime_permissions')
+
+        valid_ids = {str(a.user_id) for a in project.assignments.all()}
+        if project.lead_id:
+            valid_ids.add(str(project.lead_id))
+        if employee_id not in valid_ids:
+            messages.error(request, "That employee is not on this project's team.")
+            return redirect('attendance:overtime_permissions')
+
+        if not perm_date:
+            messages.error(request, "Choose a date.")
+            return redirect('attendance:overtime_permissions')
+
+        OvertimePermission.objects.update_or_create(
+            employee_id=employee_id, project=project, date=perm_date,
+            defaults={
+                'permission_type': permission_type,
+                'notes': request.POST.get('notes', ''),
+                'authorized_by': request.user,
+            },
+        )
+        messages.success(request, "Overtime / Sunday work permission granted.")
+        return redirect('attendance:overtime_permissions')
+
+    projects_data = [
+        {
+            'id': p.id,
+            'name': p.name,
+            'manager': p.manager.get_full_name() or p.manager.username if p.manager else '-',
+            'employees': [
+                {'id': a.user_id, 'name': a.user.get_full_name() or a.user.username}
+                for a in p.assignments.all()
+            ] + ([{'id': p.lead_id, 'name': p.lead.get_full_name() or p.lead.username}] if p.lead_id else []),
+        }
+        for p in projects.prefetch_related('assignments__user').select_related('lead', 'manager')
+    ]
+
+    permissions = OvertimePermission.objects.filter(project__in=projects).select_related(
+        'employee', 'project', 'project__manager', 'authorized_by'
+    )[:150]
+
+    return render(request, 'attendance/overtime_permissions.html', {
+        'projects': projects, 'projects_data': projects_data,
+        'permissions': permissions, 'today': timezone.localdate(),
+    })
+
+
+@login_required
+def revoke_overtime_permission(request, permission_id):
+    permission = get_object_or_404(OvertimePermission, id=permission_id)
+    can_manage = (
+        request.user.role == 'HR'
+        or permission.project.manager_id == request.user.id
+        or permission.project.lead_id == request.user.id
+    )
+    if not can_manage:
+        messages.error(request, "You cannot revoke this permission.")
+        return redirect('attendance:overtime_permissions')
+    if request.method == 'POST':
+        permission.delete()
+        messages.info(request, "Permission revoked.")
+    return redirect('attendance:overtime_permissions')
+@login_required
+def my_overtime_permissions(request):
+    """Read-only view for an employee to see exactly which dates they've
+    been authorized to work overtime and/or Sunday, and by whom."""
+    permissions = OvertimePermission.objects.filter(
+        employee=request.user
+    ).select_related('project', 'project__manager', 'authorized_by').order_by('-date')
+
+    today = timezone.localdate()
+    upcoming = [p for p in permissions if p.date >= today]
+    past = [p for p in permissions if p.date < today]
+
+    return render(request, 'attendance/my_overtime_permissions.html', {
+        'upcoming': upcoming, 'past': past,
+    })
