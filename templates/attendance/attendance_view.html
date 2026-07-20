@@ -92,6 +92,30 @@
       <tr><td>Night Duty</td><td>{{ summary.night_duty }}</td></tr>
     </table>
   </div>
+  {% if emp_user and request.user.role == 'HR' %}
+  <div class="card">
+    <h3>Adjust This Month</h3>
+    <p style="color:var(--grey-700); font-size:0.85rem; margin-top:0;">
+      Override CL Quota or Total (PH/Sunday) for {{ emp_user.get_full_name|default:emp_user.username }} — {{ summary.month_name }} only. Leave blank to use the automatic default.
+    </p>
+    <form method="post" action="{% url 'attendance:update_monthly_overrides' emp_user.id %}" style="display:flex; gap:16px; align-items:end; flex-wrap:wrap;">
+      {% csrf_token %}
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="month" value="{{ month }}">
+      <div style="min-width:160px;">
+        <label>CL Quota</label>
+        <input type="number" min="0" name="cl_quota_override" class="form-control" style="margin-bottom:0;" value="{{ summary.cl_quota }}">
+      </div>
+      <div style="min-width:160px;">
+        <label>Total (PH/Sunday)</label>
+        <input type="number" min="0" name="ph_sunday_override" class="form-control" style="margin-bottom:0;" value="{{ summary.total_ph_sunday }}">
+      </div>
+      <div>
+        <button type="submit" class="btn btn-accent">Save Changes</button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
   {% endwith %}
 
 {% elif view_type == 'weekly' %}

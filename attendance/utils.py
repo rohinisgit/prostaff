@@ -41,6 +41,13 @@ def _permissions_map(user, first_day, last_day):
     ).select_related('project')
     return {p.date: p for p in perms}
 
+def _monthly_overrides(user, year, month):
+    """Returns (cl_quota_override, ph_sunday_override) for this user/month —
+    either is None if HR hasn't set an override."""
+    sheet = MonthlyAttendanceSheet.objects.filter(user=user, year=year, month=month).first()
+    if not sheet:
+        return None, None
+    return sheet.cl_quota_override, sheet.ph_sunday_override
 
 def _authorized_hours(record, is_sunday, permission):
     """Returns (counted_hours, was_capped).
@@ -99,6 +106,7 @@ def build_monthly_summary(user, year, month):
     sunday_hours = Decimal('0.00')
     night_duty_count = 0
     total_hours_worked = Decimal('0.00')
+    overtime_hours = Decimal('0.00')
 
     for day_num in range(1, days_in_month + 1):
         current_date = date(year, month, day_num)
@@ -120,6 +128,16 @@ def build_monthly_summary(user, year, month):
         if is_sunday and record:
             sunday_hours += hours
 
+        # Overtime: any authorized hours worked on a Sunday count in full
+        # (the Sunday itself is already paid separately below), and any
+        # authorized hours beyond the standard 8-hour day on a weekday
+        # count as overtime too.
+        if is_sunday:
+            if hours > 0:
+                overtime_hours += hours
+        elif hours > STANDARD_DAILY_HOURS_CAP:
+            overtime_hours += (hours - STANDARD_DAILY_HOURS_CAP)
+
         if record and record.is_night_duty:
             night_duty_count += 1
 
@@ -138,8 +156,17 @@ def build_monthly_summary(user, year, month):
     wkd = days_in_month - sundays  # working days excluding Sunday
     actual_leave = max(0, wkd - on_duty_non_sunday)  # WKD days not attended
 
-    cl_quota = get_cl_quota(user)
+    cl_override, ph_override = _monthly_overrides(user, year, month)
+    cl_quota = cl_override if cl_override is not None else get_cl_quota(user)
+    total_ph_sunday = ph_override if ph_override is not None else sundays
+
     lop = max(0, actual_leave - cl_quota)
+    cl_used = actual_leave - lop  # CL days actually consumed (paid)
+
+    overtime_days = (overtime_hours / STANDARD_DAILY_HOURS_CAP).quantize(Decimal('0.01'))
+    total_days_to_pay = (
+        Decimal(on_duty_non_sunday) + Decimal(total_ph_sunday) + Decimal(cl_used) + overtime_days
+    ).quantize(Decimal('0.01'))
 
     return {
         'user': user,
@@ -151,16 +178,20 @@ def build_monthly_summary(user, year, month):
         'total_days_worked': on_duty_days,
         'on_duty': on_duty_days,
         'cl_quota': cl_quota,
+        'cl_used': cl_used,
         'sunday_hours': sunday_hours,
         'total_hours_worked': total_hours_worked,
+        'overtime_hours': overtime_hours,
+        'overtime_days': overtime_days,
+        'total_days_to_pay': total_days_to_pay,
         'wkd': wkd,
         'actual_leave': actual_leave,
         'lop': lop,
-        'total_ph_sunday': sundays,
+        'total_ph_sunday': total_ph_sunday,
         'night_duty': night_duty_count,
+        'has_cl_override': cl_override is not None,
+        'has_ph_override': ph_override is not None,
     }
-
-
 def generate_monthly_excel(summary):
     """Builds an .xlsx workbook (in-memory) matching the monthly register
     format: one row per employee, one column per calendar day, plus the
@@ -350,11 +381,12 @@ def generate_team_monthly_excel(summaries, year, month):
         col += 1
     day_end_col = col
 
-    summary_headers = [
-        'Total Days Worked', 'CL', 'On Duty', 'Sunday Hours', 'Total Hours',
-        'WKD (Excl. Sunday)', 'Actual Leave', 'LOP', 'Total (PH/Sunday)',
-        'Total Days in Month', 'Night Duty',
-    ]
+    summary_values = [
+            summary['total_days_worked'], summary['cl_quota'], float(summary['overtime_hours']),
+            float(summary['sunday_hours']), float(summary['total_hours_worked']),
+            summary['actual_leave'], summary['total_ph_sunday'], float(summary['total_days_to_pay']),
+            summary['days_in_month'], summary['lop'], float(summary.get('salary') or 0),
+        ]
     summary_start_col = col
     for h in summary_headers:
         c = ws.cell(row=header_row, column=col, value=h)

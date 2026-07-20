@@ -77,7 +77,8 @@ class MonthlyAttendanceSheet(models.Model):
     month = models.IntegerField()
     excel_file = models.FileField(upload_to='monthly_attendance/', null=True, blank=True)
     generated_at = models.DateTimeField(auto_now=True)
-
+    cl_quota_override = models.PositiveIntegerField(null=True, blank=True)
+    ph_sunday_override = models.PositiveIntegerField(null=True, blank=True)
     class Meta:
         unique_together = ('user', 'year', 'month')
         ordering = ['-year', '-month']

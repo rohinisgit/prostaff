@@ -70,18 +70,17 @@
       {% for label in day_labels %}
       <th>{{ label }}</th>
       {% endfor %}
-      <th>Days Worked</th>
-      <th>CL</th>
-      <th>On Duty</th>
-      <th>Sunday Hrs</th>
-      <th>Total Hrs</th>
-      <th>WKD</th>
-      <th>Actual Leave</th>
-      <th>LOP</th>
-      <th>PH/Sunday</th>
-      <th>Days in Month</th>
-      <th>Night Duty</th>
-      <th></th>
+      <td style="text-align:center;">{{ s.total_days_worked }}</td>
+      <td style="text-align:center;">{{ s.cl_quota }}</td>
+      <td style="text-align:center;">{{ s.overtime_hours }}</td>
+      <td style="text-align:center;">{{ s.sunday_hours }}</td>
+      <td style="text-align:center;">{{ s.total_hours_worked }}</td>
+      <td style="text-align:center;">{{ s.actual_leave }}</td>
+      <td style="text-align:center;">{{ s.total_ph_sunday }}</td>
+      <td style="text-align:center; font-weight:600;">{{ s.total_days_to_pay }}</td>
+      <td style="text-align:center;">{{ s.days_in_month }}</td>
+      <td style="text-align:center;">{{ s.lop }}</td>
+      <td style="text-align:center;">{% if s.salary %}Rs. {{ s.salary }}{% else %}-{% endif %}</td>
     </tr>
     {% for s in summaries %}
     <tr>

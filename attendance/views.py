@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.http import HttpResponse
 from django.utils import timezone
 
-from core.decorators import hr_or_admin_required
+from core.decorators import hr_or_admin_required,hr_only_required
 from core.models import User
 from attendance.models import AttendanceRecord, MonthlyAttendanceSheet
 from attendance.utils import (
@@ -18,6 +18,7 @@ from attendance.utils import (
 from django.db.models import Q
 from attendance.models import AttendanceRecord, MonthlyAttendanceSheet, OvertimePermission
 from projects.models import Project
+from django.urls import reverse
 
 @login_required
 def punch(request):
@@ -246,6 +247,13 @@ def team_monthly_attendance(request):
     active_users = active_users.order_by('first_name', 'username')
     summaries = build_team_monthly_summary(active_users, year, month)
 
+    from payroll.models import SalaryStructure
+    salary_map = {
+        s.user_id: s.gross for s in SalaryStructure.objects.filter(user__in=active_users)
+    }
+    for summary in summaries:
+        summary['salary'] = salary_map.get(summary['user'].id)
+
     all_departments = sorted({
         u.department.name for u in User.objects.filter(profile__status='ACTIVE')
         .select_related('department') if u.department
@@ -304,6 +312,15 @@ def download_team_monthly_attendance(request, year, month):
 
     active_users = active_users.order_by('first_name', 'username')
     summaries = build_team_monthly_summary(active_users, year, month)
+
+    from payroll.models import SalaryStructure
+    salary_map = {
+        s.user_id: s.gross for s in SalaryStructure.objects.filter(user__in=active_users)
+    }
+    for summary in summaries:
+        summary['salary'] = salary_map.get(summary['user'].id)
+
+    buffer = generate_team_monthly_excel(summaries, year, month)
     buffer = generate_team_monthly_excel(summaries, year, month)
     filename = f"team_attendance_{year}_{month:02d}.xlsx"
     response = HttpResponse(
@@ -418,3 +435,35 @@ def my_overtime_permissions(request):
     return render(request, 'attendance/my_overtime_permissions.html', {
         'upcoming': upcoming, 'past': past,
     })
+
+@hr_only_required
+def update_monthly_overrides(request, user_id):
+    """HR can override an employee's CL Quota and Total (PH/Sunday) count
+    for one specific month — e.g. to account for festival holidays that
+    aren't automatically detected. Admin stays view-only, same as
+    everywhere else."""
+    emp_user = get_object_or_404(User, id=user_id)
+    today = timezone.localdate()
+    year, month = today.year, today.month
+
+    if request.method == 'POST':
+        try:
+            year, month = normalize_year_month(
+                int(request.POST.get('year', year)), int(request.POST.get('month', month))
+            )
+        except (TypeError, ValueError):
+            messages.error(request, "Invalid month selected.")
+            return redirect('attendance:employee_attendance_view', user_id=emp_user.id)
+
+        cl_quota_raw = request.POST.get('cl_quota_override', '').strip()
+        ph_sunday_raw = request.POST.get('ph_sunday_override', '').strip()
+
+        sheet, _ = MonthlyAttendanceSheet.objects.get_or_create(user=emp_user, year=year, month=month)
+        sheet.cl_quota_override = int(cl_quota_raw) if cl_quota_raw else None
+        sheet.ph_sunday_override = int(ph_sunday_raw) if ph_sunday_raw else None
+        sheet.save()
+
+        regenerate_and_save_monthly_sheet(emp_user, year, month)
+        messages.success(request, f"Updated overrides for {emp_user} — {year}-{month:02d}.")
+
+    return redirect(f"{reverse('attendance:employee_attendance_view', args=[emp_user.id])}?view=monthly&year={year}&month={month}")
