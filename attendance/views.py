@@ -19,6 +19,7 @@ from django.db.models import Q
 from attendance.models import AttendanceRecord, MonthlyAttendanceSheet, OvertimePermission
 from projects.models import Project
 from django.urls import reverse
+from core.utils import get_active_branch
 
 @login_required
 def punch(request):
@@ -67,9 +68,13 @@ def employee_attendance(request, user_id):
 @hr_or_admin_required
 def active_attendance_today(request):
     today = timezone.localdate()
+    active_branch = get_active_branch(request)
+
     active_users = User.objects.filter(profile__status='ACTIVE').exclude(
         id=request.user.id
     ).select_related('department', 'profile')
+    if active_branch:
+        active_users = active_users.filter(branch=active_branch)
 
     records = AttendanceRecord.objects.filter(date=today, user__in=active_users).select_related('user')
     records_by_user = {r.user_id: r for r in records}
@@ -95,7 +100,6 @@ def active_attendance_today(request):
         'present_count': present_count, 'absent_count': absent_count,
         'total_active': len(rows),
     })
-
 
 # ---------------------------------------------------------------------------
 # Unified weekly / monthly / yearly attendance view
@@ -225,9 +229,13 @@ def team_monthly_attendance(request):
     role_filter = request.GET.get('role', '')
     department_filter = request.GET.get('department', '')
 
+    active_branch = get_active_branch(request)
+
     active_users = User.objects.filter(profile__status='ACTIVE').exclude(
         id=request.user.id
     ).select_related('department', 'profile')
+    if active_branch:
+        active_users = active_users.filter(branch=active_branch)
 
     if query:
         active_users = active_users.filter(
@@ -254,11 +262,14 @@ def team_monthly_attendance(request):
     for summary in summaries:
         summary['salary'] = salary_map.get(summary['user'].id)
 
+    dept_base = User.objects.filter(profile__status='ACTIVE')
+    if active_branch:
+        dept_base = dept_base.filter(branch=active_branch)
+
     all_departments = sorted({
-        u.department.name for u in User.objects.filter(profile__status='ACTIVE')
-        .select_related('department') if u.department
+        u.department.name for u in dept_base.select_related('department') if u.department
     })
-    has_no_dept = User.objects.filter(profile__status='ACTIVE', department__isnull=True).exists()
+    has_no_dept = dept_base.filter(department__isnull=True).exists()
     department_options = all_departments + (['No Department'] if has_no_dept else [])
     role_options = [('EMPLOYEE', 'Employee'), ('MANAGER', 'Manager'), ('HR', 'HR'), ('ADMIN', 'Admin')]
 
@@ -281,7 +292,6 @@ def team_monthly_attendance(request):
         'selected_department': department_filter,
     })
 
-
 @hr_or_admin_required
 def download_team_monthly_attendance(request, year, month):
     from django.db.models import Q
@@ -291,9 +301,13 @@ def download_team_monthly_attendance(request, year, month):
     role_filter = request.GET.get('role', '')
     department_filter = request.GET.get('department', '')
 
+    active_branch = get_active_branch(request)
+
     active_users = User.objects.filter(profile__status='ACTIVE').exclude(
         id=request.user.id
     ).select_related('department', 'profile')
+    if active_branch:
+        active_users = active_users.filter(branch=active_branch)
 
     if query:
         active_users = active_users.filter(
@@ -321,7 +335,6 @@ def download_team_monthly_attendance(request, year, month):
         summary['salary'] = salary_map.get(summary['user'].id)
 
     buffer = generate_team_monthly_excel(summaries, year, month)
-    buffer = generate_team_monthly_excel(summaries, year, month)
     filename = f"team_attendance_{year}_{month:02d}.xlsx"
     response = HttpResponse(
         buffer.read(),
@@ -329,8 +342,6 @@ def download_team_monthly_attendance(request, year, month):
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
-
-
 def _overtime_manageable_projects(user):
     """HR sees every project. A Manager only sees projects they created
     (manager) or lead."""

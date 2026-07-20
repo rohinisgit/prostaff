@@ -14,6 +14,7 @@ from core.models import User, Department
 from payroll.models import PayrollRun, Payslip, SalaryStructure
 from payroll.forms import SalaryStructureForm
 from payroll.utils import compute_payslip_for_user, generate_payslip_pdf
+from core.utils import get_active_branch
 
 
 def _month_bounds(year, month):
@@ -69,16 +70,20 @@ def download_payslip(request, payslip_id):
 
 @hr_or_admin_required
 def payroll_runs(request):
-    """Ordering: Admin, then HR, then per-department (manager followed by
-    that department's employees, departments alphabetical), then anyone
-    left over. This base hierarchy stays fixed — the template only ever
-    re-sorts *within* it, pushing already-credited rows after
-    not-yet-credited ones for the selected month."""
-    role_labels = {'ADMIN': 'Admin', 'MANAGER': 'Manager', 'EMPLOYEE': 'Employee', 'HR': 'HR'}
+    role_order = ['ADMIN', 'MANAGER', 'EMPLOYEE', 'HR']
+    role_labels = {'ADMIN': 'Admin', 'MANAGER': 'Managers', 'EMPLOYEE': 'Employees', 'HR': 'HR'}
 
-    all_users = User.objects.exclude(id=request.user.id).select_related('department', 'profile').filter(
-    profile__status='ACTIVE'
-)
+    active_branch = get_active_branch(request)
+
+    # Onboarding employees haven't started yet and Exited employees are
+    # gone — payroll only ever concerns Active employees. Also scoped to
+    # whichever branch is currently active for this HR/Admin.
+    all_users = User.objects.exclude(id=request.user.id).select_related('department', 'profile').exclude(
+        profile__status__in=['ONBOARDING', 'EXITED']
+    )
+    if active_branch:
+        all_users = all_users.filter(branch=active_branch)
+
     months = _recent_months(timezone.localdate())
 
     released_payslips = Payslip.objects.filter(
@@ -89,58 +94,21 @@ def payroll_runs(request):
         key = p.payroll_run.start_date.strftime('%Y-%m')
         credited_map.setdefault(p.user_id, set()).add(key)
 
-    structure_user_ids = set(
-        SalaryStructure.objects.filter(user__in=all_users).values_list('user_id', flat=True)
-    )
+    sections = []
+    for role in role_order:
+        role_employees = all_users.filter(role=role).order_by('first_name', 'username')
+        if not role_employees.exists():
+            continue
+        employees_list = [
+            {
+                'user': emp,
+                'credited_months': ','.join(sorted(credited_map.get(emp.id, set()))),
+            }
+            for emp in role_employees
+        ]
+        sections.append({'role': role, 'role_label': role_labels[role], 'employees': employees_list})
 
-    def _employee_dict(emp):
-        return {
-            'user': emp,
-            'role': emp.role,
-            'role_label': role_labels.get(emp.role, emp.get_role_display()),
-            'credited_months': ','.join(sorted(credited_map.get(emp.id, set()))),
-            'has_salary_structure': emp.id in structure_user_ids,
-        }
-
-    ordered_employees = []
-    seen_ids = set()
-
-    admins = all_users.filter(role='ADMIN').order_by('first_name', 'username')
-    for u in admins:
-        ordered_employees.append(_employee_dict(u))
-        seen_ids.add(u.id)
-
-    hr_users = all_users.filter(role='HR').order_by('first_name', 'username')
-    for u in hr_users:
-        ordered_employees.append(_employee_dict(u))
-        seen_ids.add(u.id)
-
-    for dept in Department.objects.order_by('name'):
-        dept_people = []
-        if dept.manager_id and dept.manager_id != request.user.id and dept.manager_id not in seen_ids:
-            dept_people.append(dept.manager)
-            seen_ids.add(dept.manager_id)
-
-        dept_employees = all_users.filter(department=dept, role='EMPLOYEE').exclude(
-            id__in=seen_ids
-        ).order_by('first_name', 'username')
-        for emp in dept_employees:
-            dept_people.append(emp)
-            seen_ids.add(emp.id)
-
-        other_managers = all_users.filter(department=dept, role='MANAGER').exclude(
-            id__in=seen_ids
-        ).order_by('first_name', 'username')
-        for m in other_managers:
-            dept_people.append(m)
-            seen_ids.add(m.id)
-
-        ordered_employees.extend(_employee_dict(u) for u in dept_people)
-
-    remaining = all_users.exclude(id__in=seen_ids).order_by('first_name', 'username')
-    ordered_employees.extend(_employee_dict(u) for u in remaining)
-
-    return render(request, 'payroll/runs.html', {'employees': ordered_employees, 'months': months})
+    return render(request, 'payroll/runs.html', {'sections': sections, 'months': months}) 
 
 
 @hr_or_admin_required

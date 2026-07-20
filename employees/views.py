@@ -1,3 +1,5 @@
+from urllib import request
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -18,6 +20,8 @@ from payroll.forms import SalaryStructureForm
 from django.urls import reverse
 from payroll.models import SalaryStructure
 from increments.models import IncrementRequest
+from core.utils import get_active_branch, user_can_switch_branch
+from core.decorators import role_required
 
 
 def _present_user_ids_today():
@@ -198,16 +202,39 @@ def quit_after_negotiation(request, resignation_id):
 
 @hr_only_required
 def onboard_employee(request):
+    active_branch = get_active_branch(request)
     if request.method == 'POST':
         form = NewEmployeeForm(request.POST)
         if form.is_valid():
-            user = form.save()
+            user = form.save(commit=False)
+            if not user_can_switch_branch(request.user):
+                user.branch = request.user.branch
+            user.set_password(form.cleaned_data['password'])
+            department = form.cleaned_data.get('department')
+            if department and department.manager_id and user.role != User.ROLE_MANAGER:
+                user.manager = department.manager
+            else:
+                user.manager = None
+            user.save()
             EmployeeProfile.objects.create(user=user, status='ONBOARDING')
             messages.success(request, f'{user} onboarded successfully. Share their login credentials securely.')
             return redirect('employees:employee_detail', user_id=user.id)
     else:
-        form = NewEmployeeForm()
-    return render(request, 'employees/onboard.html', {'form': form})
+        initial = {}
+        if active_branch and not user_can_switch_branch(request.user):
+            initial['branch'] = active_branch.id
+        form = NewEmployeeForm(initial=initial)
+    return render(request, 'employees/onboard.html', {'form': form, 'locked_branch': not user_can_switch_branch(request.user)})
+
+@role_required('ADMIN')
+def toggle_branch_admin_access(request, user_id):
+    emp_user = get_object_or_404(User, id=user_id, role='HR')
+    if request.method == 'POST':
+        emp_user.can_access_all_branches = not emp_user.can_access_all_branches
+        emp_user.save()
+        state = "granted" if emp_user.can_access_all_branches else "revoked"
+        messages.success(request, f"All-branch access {state} for {emp_user}.")
+    return redirect('employees:edit_employee_profile', user_id=emp_user.id)
 
 
 @hr_or_admin_required
@@ -220,6 +247,9 @@ def employee_directory(request):
 
     if request.user.role == 'HR':
         employees = employees.exclude(role__in=['HR', 'ADMIN'])
+        active_branch = get_active_branch(request)
+    if active_branch:
+        employees = employees.filter(branch=active_branch)
 
     if query:
         employees = employees.filter(
@@ -236,9 +266,11 @@ def employee_directory(request):
 
     employees = list(employees)
 
-    base_qs = User.objects.exclude(id=request.user.id)
+    base_qs = User.objects.exclude(id=request.user.id).exclude(profile__status='ONBOARDING')
     if request.user.role == 'HR':
         base_qs = base_qs.exclude(role__in=['HR', 'ADMIN'])
+    if active_branch:
+        base_qs = base_qs.filter(branch=active_branch)
     dept_qs = base_qs.select_related('department')
     dept_names = sorted(
         {emp.department.name for emp in dept_qs if emp.department},
@@ -364,9 +396,10 @@ def edit_employee_profile(request, user_id):
     salary_form = SalaryStructureForm(instance=salary_structure)
 
     return render(request, 'employees/edit_employee_profile.html', {
-        'emp_user': emp_user, 'form': form,
+       'emp_user': emp_user, 'form': form,
         'documents': documents, 'doc_form': doc_form, 'role_form': role_form,
         'profile': profile, 'salary_form': salary_form,
+        'is_admin_viewer': request.user.role == 'ADMIN',
     })
 
 

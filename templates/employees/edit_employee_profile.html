@@ -22,6 +22,7 @@
       <div><label>Email</label>{{ form.email }}{% if form.email.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.email.errors.0 }}</p>{% endif %}</div>
       <div><label>Employee ID</label>{{ form.employee_id }}{% if form.employee_id.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.employee_id.errors.0 }}</p>{% endif %}</div>
       <div><label>Department</label>{{ form.department }}</div>
+      <div><label>Branch</label>{{ form.branch }}</div>
       <div><label>Phone</label>
         <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.phone_country_code }}{{ form.phone }}</div>
         {% if form.phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.phone.errors.0 }}</p>{% endif %}
@@ -57,6 +58,17 @@
   </form>
   <p style="color:var(--grey-500); font-size:0.8rem; margin:0;">HR can only assign Employee or Manager. Contact Admin to grant HR/Admin access.</p>
 </div>
+{% if is_admin_viewer and emp_user.role == 'HR' %}
+<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--grey-100);">
+  <p style="margin:0 0 8px; font-size:0.85rem; color:var(--grey-700);">
+    All-Branch Access: {% if emp_user.can_access_all_branches %}<span class="badge badge-success">Granted</span>{% else %}<span class="badge badge-warning">Restricted to own branch</span>{% endif %}
+  </p>
+  <form method="post" action="{% url 'employees:toggle_branch_admin_access' emp_user.id %}" style="margin:0;">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-outline btn-sm">{% if emp_user.can_access_all_branches %}Revoke{% else %}Grant{% endif %} All-Branch Access</button>
+  </form>
+</div>
+{% endif %}
 {% endif %}
 
 <div class="card">

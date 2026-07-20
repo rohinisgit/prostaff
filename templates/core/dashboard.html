@@ -6,11 +6,27 @@
     <h1>Welcome, {{ user.get_full_name|default:user.username }}</h1>
     <p>Here's what's happening today.</p>
   </div>
-  {% if user.role == 'HR' %}
-  <a href="{% url 'attendance:active_attendance_today' %}" class="btn btn-accent">Go to Attendance</a>
-  {% elif user.role != 'ADMIN' %}
-  <a href="{% url 'attendance:punch' %}" class="btn btn-accent">Go to Attendance</a>
-  {% endif %}
+  <div style="display:flex; align-items:center; gap:12px;">
+    {% if can_switch_branch %}
+    <form method="post" action="{% url 'core:set_active_branch' %}" style="margin:0;">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.path }}">
+      <select name="branch_id" class="form-control" style="margin:0; min-width:200px;" onchange="this.form.submit()">
+        {% for b in all_branches %}
+        <option value="{{ b.id }}" {% if active_branch.id == b.id %}selected{% endif %}>{{ b.name }} ({{ b.code }})</option>
+        {% endfor %}
+      </select>
+    </form>
+    {% elif active_branch %}
+    <span class="badge badge-info">{{ active_branch.name }} ({{ active_branch.code }})</span>
+    {% endif %}
+
+    {% if user.role == 'HR' %}
+    <a href="{% url 'attendance:active_attendance_today' %}" class="btn btn-accent">Go to Attendance</a>
+    {% elif user.role != 'ADMIN' %}
+    <a href="{% url 'attendance:punch' %}" class="btn btn-accent">Go to Attendance</a>
+    {% endif %}
+  </div>
 </div>
 
 {% if user.role == 'ADMIN' %}

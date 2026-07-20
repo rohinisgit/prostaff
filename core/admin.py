@@ -2,9 +2,10 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm
 from django.utils.safestring import mark_safe
-from core.models import User, Department
+from core.models import User, Department, Branch
 
 admin.site.register(Department)
+admin.site.register(Branch)
 
 
 class SimpleUserChangeForm(UserChangeForm):

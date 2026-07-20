@@ -26,4 +26,5 @@ urlpatterns = [
     path('<int:user_id>/team-member/', views.team_member_detail, name='team_member_detail'),
     path('<int:user_id>/update-status/', views.update_employee_status, name='update_employee_status'),
     path('resignation/mine/', views.my_resignation, name='my_resignation'),
+    path('<int:user_id>/toggle-branch-access/', views.toggle_branch_admin_access, name='toggle_branch_admin_access'),
 ]
