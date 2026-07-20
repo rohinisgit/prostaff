@@ -115,7 +115,7 @@ class NewEmployeeForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ['username', 'first_name', 'last_name', 'email',
-                  'role', 'department', 'date_joined_company', 'phone_country_code', 'phone', 'password']
+                  'role', 'department', 'branch', 'date_joined_company', 'phone_country_code', 'phone', 'password']
         widgets = {'date_joined_company': forms.DateInput(attrs={'type': 'date'})}
 
     def __init__(self, *args, **kwargs):
@@ -147,7 +147,7 @@ class HREmployeeEditForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'employee_id', 'department', 'date_joined_company', 'phone_country_code', 'phone']
+        fields = ['first_name', 'last_name', 'email', 'employee_id', 'department', 'branch','date_joined_company', 'phone_country_code', 'phone']
         widgets = {'date_joined_company': forms.DateInput(attrs={'type': 'date'})}
 
     def __init__(self, *args, **kwargs):

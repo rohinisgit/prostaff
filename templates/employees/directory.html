@@ -1,7 +1,8 @@
 {% extends 'core/base.html' %}
 {% block content %}
 <div class="page-header">
-  <h1>Employee Directory</h1>
+  <h1>Employee Directory {% if active_branch %}<span style="font-size:0.9rem; font-weight:500; color:var(--grey-500);">— {{ active_branch.name }}</span>{% endif %}</h1>
+  
   {% if request.user.role == 'HR' %}
   <a href="{% url 'employees:onboard' %}" class="btn btn-accent">+ Onboard Employee</a>
   {% endif %}

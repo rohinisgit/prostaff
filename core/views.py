@@ -1,6 +1,6 @@
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.utils import timezone
 from django.db.models import Q
 
@@ -8,6 +8,11 @@ from core.forms import StyledAuthenticationForm
 from attendance.models import AttendanceRecord
 from leaves.models import LeaveRequest
 from employees.models import EmployeeProfile
+from django.contrib import messages
+from core.utils import get_active_branch
+from core.models import Branch
+
+
 
 
 class HRLoginView(auth_views.LoginView):
@@ -15,6 +20,22 @@ class HRLoginView(auth_views.LoginView):
     authentication_form = StyledAuthenticationForm
     redirect_authenticated_user = True
 
+@login_required
+def set_active_branch(request):
+    if request.method == 'POST':
+        user = request.user
+        can_switch = user.role == 'ADMIN' or (user.role == 'HR' and user.can_access_all_branches)
+        if not can_switch:
+            messages.error(request, "You do not have permission to switch branches.")
+            return redirect('core:dashboard')
+        branch_id = request.POST.get('branch_id')
+        if branch_id:
+            request.session['active_branch_id'] = branch_id
+            branch = Branch.objects.filter(id=branch_id).first()
+            if branch:
+                messages.success(request, f"You are now viewing {branch.name} ({branch.code}).")
+        return redirect(request.POST.get('next') or 'core:dashboard')
+    return redirect('core:dashboard')
 
 @login_required
 def dashboard(request):
@@ -24,40 +45,20 @@ def dashboard(request):
     today = timezone.localdate()
     context['today_record'] = AttendanceRecord.objects.filter(user=user, date=today).first()
 
+    active_branch = get_active_branch(request)
+
     if user.role == 'ADMIN':
-        context['hr_count'] = EmployeeProfile.objects.filter(user__role='HR').count()
-        context['manager_count'] = EmployeeProfile.objects.filter(user__role='MANAGER').count()
-        context['employee_count'] = EmployeeProfile.objects.filter(user__role='EMPLOYEE').count()
+        branch_users = EmployeeProfile.objects.filter(user__branch=active_branch) if active_branch else EmployeeProfile.objects.all()
+        context['hr_count'] = branch_users.filter(user__role='HR').count()
+        context['manager_count'] = branch_users.filter(user__role='MANAGER').count()
+        context['employee_count'] = branch_users.filter(user__role='EMPLOYEE').count()
 
     elif user.role == 'HR':
         base_qs = EmployeeProfile.objects.exclude(user__role__in=['HR', 'ADMIN'])
+        if active_branch:
+            base_qs = base_qs.filter(user__branch=active_branch)
         context['total_employees'] = base_qs.count()
-
-        active_qs = base_qs.filter(status='ACTIVE')
-        context['active_employees'] = active_qs.count()
-        context['inactive_employees'] = base_qs.filter(status='ONBOARDING').count()
-        context['exited_employees'] = base_qs.filter(status='EXITED').count()
-
-        active_user_ids = list(active_qs.values_list('user_id', flat=True))
-
-        present_ids = set(AttendanceRecord.objects.filter(
-            date=today, in_time__isnull=False, user_id__in=active_user_ids
-        ).values_list('user_id', flat=True))
-
-        on_leave_ids = set(LeaveRequest.objects.filter(
-            status='APPROVED', user_id__in=active_user_ids
-        ).filter(
-            Q(permission_date=today) | Q(start_date__lte=today, end_date__gte=today)
-        ).values_list('user_id', flat=True))
-
-        total_active = len(active_user_ids)
-        present_count = len(present_ids)
-        on_leave_count = len(on_leave_ids - present_ids)
-        absent_count = max(0, total_active - present_count - on_leave_count)
-
-        context['present_today'] = present_count
-        context['on_leave_today'] = on_leave_count
-        context['absent_today'] = absent_count
+        context['active_employees'] = base_qs.filter(status='ACTIVE').count()
 
     else:
         month_start = today.replace(day=1)

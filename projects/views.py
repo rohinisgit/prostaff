@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
 from django.db.models import Q
+from core.utils import get_active_branch
 
 from core.decorators import hr_or_admin_required, hr_only_required
 from core.models import User
@@ -17,8 +18,16 @@ def _can_manage_project(user):
 
 @login_required
 def project_list(request):
+    active_branch = get_active_branch(request)
+
     if request.user.is_hr_or_admin():
         projects = Project.objects.filter(status__in=['APPROVED', 'COMPLETED']).prefetch_related('assignments__user')
+        if active_branch:
+            projects = projects.filter(
+                Q(manager__branch=active_branch) |
+                Q(created_by__branch=active_branch) |
+                Q(assignments__user__branch=active_branch)
+            ).distinct()
     else:
         projects = Project.objects.filter(status__in=['APPROVED', 'COMPLETED']).filter(
             Q(assignments__user=request.user) |
@@ -99,7 +108,7 @@ def create_project(request):
         messages.success(request, f'"{project.name}" has been published. Assigned employees can now see it.')
         return redirect('projects:project_detail', project_id=project.id)
 
-    employees = User.objects.filter(role='EMPLOYEE').select_related('department').order_by('first_name', 'username')
+    employees = User.objects.filter(role='EMPLOYEE', branch=request.user.branch).select_related('department').order_by('first_name', 'username')
     dept_names = sorted({emp.department.name for emp in employees if emp.department})
     has_no_dept = any(emp.department is None for emp in employees)
     departments = dept_names + (['No Department'] if has_no_dept else [])

@@ -3,6 +3,23 @@ from django.db import models
 from core.validators import COUNTRY_CODES
 
 
+class Branch(models.Model):
+    """A physical office location. Like Department, a Branch can have a
+    designated Manager overseeing it."""
+    name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=10, unique=True)
+    manager = models.ForeignKey(
+        'core.User', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='managed_branches'
+    )
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
 class Department(models.Model):
     name = models.CharField(max_length=100, unique=True)
     manager = models.ForeignKey(
@@ -35,8 +52,15 @@ class User(AbstractUser):
     manager = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='team_members')
     date_joined_company = models.DateField(null=True, blank=True)
 
-    # Phone is now stored as exactly 10 digits, with the country code kept
-    # separately so numbers can be validated and displayed consistently.
+    branch = models.ForeignKey(
+        Branch, null=True, blank=True, on_delete=models.SET_NULL, related_name='staff'
+    )
+    # Only ever set by Admin (see toggle_branch_admin_access). An HR user
+    # with this True can switch between and see every branch. Every other
+    # HR is locked to their own assigned branch everywhere branch
+    # filtering applies — they never see a switcher at all.
+    can_access_all_branches = models.BooleanField(default=False)
+
     phone_country_code = models.CharField(max_length=5, choices=COUNTRY_CODES, default='+91')
     phone = models.CharField(max_length=10, blank=True)
 
