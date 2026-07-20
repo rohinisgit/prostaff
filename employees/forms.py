@@ -4,7 +4,7 @@ from core.validators import (
     bank_account_validator, ifsc_validator, pan_validator, aadhar_validator,
     COUNTRY_CODES,
 )
-from employees.models import EmployeeProfile, EmployeeDocument, ResignationRequest
+from employees.models import EmployeeProfile, EmployeeDocument, ResignationRequest, BankDetail
 from core.models import User
 
 NAME_ATTRS = {
@@ -34,58 +34,61 @@ PAN_ATTRS = {
     'maxlength': 10, 'style': 'text-transform:uppercase;',
     'oninput': "this.value = this.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()",
 }
+# Aadhar is displayed grouped as "XXXX XXXX XXXX" but stored as a plain
+# 12-digit string — the form strips spaces on clean before validation/save.
 AADHAR_ATTRS = {
-    'inputmode': 'numeric', 'pattern': '[0-9]{12}', 'title': "Exactly 12 digits.",
-    'maxlength': 12, 'oninput': "this.value = this.value.replace(/[^0-9]/g, '')",
+    'inputmode': 'numeric', 'title': "12 digits, shown as 4-4-4.",
+    'maxlength': 14,  # 12 digits + 2 inserted spaces
+    'oninput': (
+        "this.value = this.value.replace(/[^0-9]/g, '').slice(0,12)"
+        ".replace(/(.{4})(?=.)/g, '$1 ')"
+    ),
 }
 
 
 class EmployeeSelfEditForm(forms.ModelForm):
-    """Fields an employee is allowed to edit on their own profile."""
+    """Fields an employee is allowed to edit on their own profile.
+
+    Everything else (designation, employment status, shift, work type,
+    blood group, emergency contact, references, old joining date, etc.)
+    stays HR/Admin/Manager-only — see EmployeeIdentityForm.
+    """
     first_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     last_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     phone_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
     phone = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
+    aadhar_no = forms.CharField(max_length=14, required=False, validators=[aadhar_validator], widget=forms.TextInput(attrs=AADHAR_ATTRS))
+    pan_no = forms.CharField(max_length=10, required=False, validators=[pan_validator], widget=forms.TextInput(attrs=PAN_ATTRS))
 
     class Meta:
         model = EmployeeProfile
         fields = [
-            'address', 'bank_account', 'ifsc_code', 'pan_no', 'aadhar_no',
-            'emergency_contact_name', 'emergency_contact_country_code', 'emergency_contact_phone',
-            'profile_photo',
+            'address', 'profile_photo', 'date_of_birth', 'gender', 'marital_status',
+            'qualification', 'aadhar_no', 'pan_no', 'uan_pf_number', 'esi_number',
         ]
         widgets = {
             'address': forms.Textarea(attrs={'rows': 3}),
-            'bank_account': forms.TextInput(attrs=BANK_ATTRS),
-            'ifsc_code': forms.TextInput(attrs=IFSC_ATTRS),
-            'pan_no': forms.TextInput(attrs=PAN_ATTRS),
-            'aadhar_no': forms.TextInput(attrs=AADHAR_ATTRS),
-            'emergency_contact_name': forms.TextInput(attrs=NAME_ATTRS),
-            'emergency_contact_country_code': forms.Select(attrs=COUNTRY_CODE_ATTRS),
-            'emergency_contact_phone': forms.TextInput(attrs=PHONE_ATTRS),
+            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
         }
 
     def __init__(self, *args, **kwargs):
         self.user_instance = kwargs.pop('user_instance', None)
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            field.widget.attrs.setdefault('class', 'form-control')
-        for name in ['bank_account', 'ifsc_code', 'pan_no', 'aadhar_no', 'emergency_contact_name', 'emergency_contact_phone']:
-            self.fields[name].required = False
-        self.fields['bank_account'].validators.append(bank_account_validator)
-        self.fields['ifsc_code'].validators.append(ifsc_validator)
-        self.fields['pan_no'].validators.append(pan_validator)
-        self.fields['aadhar_no'].validators.append(aadhar_validator)
-        self.fields['emergency_contact_name'].validators.append(name_validator)
-        self.fields['emergency_contact_phone'].validators.append(phone_validator)
+            if not isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault('class', 'form-control')
         if self.user_instance:
             self.fields['first_name'].initial = self.user_instance.first_name
             self.fields['last_name'].initial = self.user_instance.last_name
             self.fields['phone'].initial = self.user_instance.phone
             self.fields['phone_country_code'].initial = self.user_instance.phone_country_code
+        # Show Aadhar pre-formatted with spaces even though it's stored raw.
+        if self.instance and self.instance.pk and self.instance.aadhar_no:
+            digits = self.instance.aadhar_no
+            self.initial['aadhar_no'] = ' '.join(digits[i:i + 4] for i in range(0, len(digits), 4))
 
-    def clean_ifsc_code(self):
-        return self.cleaned_data.get('ifsc_code', '').upper()
+    def clean_aadhar_no(self):
+        return self.cleaned_data.get('aadhar_no', '').replace(' ', '')
 
     def clean_pan_no(self):
         return self.cleaned_data.get('pan_no', '').upper()
@@ -104,8 +107,8 @@ class EmployeeSelfEditForm(forms.ModelForm):
 
 class NewEmployeeForm(forms.ModelForm):
     """Used by HR to onboard a new employee (creates the User).
-    Employee ID is no longer collected here — HR assigns it later from the
-    employee's Edit Profile page if needed."""
+    Employee ID / Enrollment ID are auto-generated from the branch at save
+    time (see views.onboard_employee) — not collected here."""
     password = forms.CharField(widget=forms.PasswordInput, help_text="Temporary password for the employee")
     first_name = forms.CharField(max_length=150, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     last_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
@@ -137,23 +140,96 @@ class NewEmployeeForm(forms.ModelForm):
 
 
 class HREmployeeEditForm(forms.ModelForm):
-    """HR edits an employee's core profile details from the directory's
-    Edit button — name, contact info, department, employee ID, joining date."""
+    """HR/Admin/Manager edits an employee's core profile details —
+    name, contact info, department, employee ID, joining date."""
     first_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     last_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     phone_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
     phone = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
-    employee_id = forms.CharField(max_length=20, required=False, validators=[alnum_id_validator], widget=forms.TextInput(attrs=ID_ATTRS))
+    employee_id = forms.CharField(max_length=20, required=False, validators=[alnum_id_validator], widget=forms.TextInput(attrs={**ID_ATTRS, 'readonly': 'readonly'}))
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'employee_id', 'department', 'branch','date_joined_company', 'phone_country_code', 'phone']
+        fields = ['first_name', 'last_name', 'email', 'employee_id', 'department', 'branch', 'date_joined_company', 'phone_country_code', 'phone']
         widgets = {'date_joined_company': forms.DateInput(attrs={'type': 'date'})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.setdefault('class', 'form-control')
+
+
+class EmployeeIdentityForm(forms.ModelForm):
+    """Extended identity / HR fields. Only ever reachable by HR, Admin, or
+    the employee's Manager — never editable by the employee themself.
+    (The employee-facing subset of these same underlying fields — Aadhar,
+    PAN, DOB, gender, marital status, qualification, UAN/PF, ESI — is also
+    self-editable via EmployeeSelfEditForm.)"""
+    aadhar_no = forms.CharField(max_length=14, required=False, validators=[aadhar_validator], widget=forms.TextInput(attrs=AADHAR_ATTRS))
+    pan_no = forms.CharField(max_length=10, required=False, validators=[pan_validator], widget=forms.TextInput(attrs=PAN_ATTRS))
+    emergency_contact_name = forms.CharField(max_length=100, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
+    emergency_contact_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
+    emergency_contact_phone = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
+    reference1_contact = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
+    reference2_contact = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
+
+    class Meta:
+        model = EmployeeProfile
+        fields = [
+            'designation', 'gender', 'marital_status', 'date_of_birth',
+            'qualification', 'previous_experience', 'current_company_experience',
+            'employment_status', 'shift', 'work_type', 'is_pf_applicable',
+            'id_card_received', 'blood_group', 'uan_pf_number', 'esi_number',
+            'aadhar_no', 'pan_no',
+            'emergency_contact_name', 'emergency_contact_country_code', 'emergency_contact_phone',
+            'referred_by_name', 'referred_by_enrollment_id',
+            'reference1_name', 'reference1_type', 'reference1_contact',
+            'reference2_name', 'reference2_relation', 'reference2_contact',
+            'old_joining_date',
+        ]
+        widgets = {
+            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
+            'old_joining_date': forms.DateInput(attrs={'type': 'date'}),
+            'previous_experience': forms.TextInput(attrs={'placeholder': 'e.g. 2 years at XYZ Corp'}),
+            'current_company_experience': forms.TextInput(attrs={'placeholder': 'e.g. 1.5 years'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if not isinstance(field.widget, (forms.CheckboxInput,)):
+                field.widget.attrs.setdefault('class', 'form-control')
+        # Show Aadhar pre-formatted with spaces even though it's stored raw.
+        if self.instance and self.instance.pk and self.instance.aadhar_no:
+            digits = self.instance.aadhar_no
+            self.initial['aadhar_no'] = ' '.join(digits[i:i + 4] for i in range(0, len(digits), 4))
+
+    def clean_aadhar_no(self):
+        return self.cleaned_data.get('aadhar_no', '').replace(' ', '')
+
+    def clean_pan_no(self):
+        return self.cleaned_data.get('pan_no', '').upper()
+
+
+class BankDetailForm(forms.ModelForm):
+    """Bank/salary account details. Editable by HR/Admin/Manager on an
+    employee's behalf (edit_employee_profile), and also self-editable by
+    the employee on their own profile (my_profile)."""
+    account_number = forms.CharField(max_length=18, required=False, validators=[bank_account_validator], widget=forms.TextInput(attrs=BANK_ATTRS))
+    ifsc_code = forms.CharField(max_length=11, required=False, validators=[ifsc_validator], widget=forms.TextInput(attrs=IFSC_ATTRS))
+    account_holder_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
+
+    class Meta:
+        model = BankDetail
+        fields = ['account_holder_name', 'account_number', 'ifsc_code', 'bank_name', 'branch_name']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault('class', 'form-control')
+
+    def clean_ifsc_code(self):
+        return self.cleaned_data.get('ifsc_code', '').upper()
 
 
 class HRDocumentForm(forms.ModelForm):
@@ -175,7 +251,10 @@ class HRDocumentForm(forms.ModelForm):
 
 
 class SelfDocumentForm(forms.ModelForm):
-    """Everyone uploads their own personal documents here."""
+    """Everyone uploads their own personal documents here. Re-uploading a
+    document type (e.g. a new Aadhar scan) is done by deleting the old one
+    first (see delete_own_document) and uploading again — this keeps only
+    one current file per type without silently overwriting history."""
     doc_type = forms.ChoiceField(
         choices=[c for c in EmployeeDocument.DOC_TYPES if c[0] in EmployeeDocument.SELF_DOC_TYPES],
         label="Document Type",

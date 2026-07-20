@@ -35,6 +35,8 @@ def hr_only_required(view_func):
             return redirect('core:dashboard')
         return view_func(request, *args, **kwargs)
     return _wrapped
+
+
 def hr_admin_or_manager_required(view_func):
     """Extended-profile identity fields (enrollment ID, aadhar, bank
     details, references, etc.) are editable/viewable in detail by HR,

@@ -1,12 +1,17 @@
 {% extends 'core/base.html' %}
 {% block content %}
 <div class="page-header">
-  <h1 style="display:flex; align-items:center; gap:12px;">
+  <div style="display:flex; align-items:center; gap:18px;">
     {% if profile.profile_photo %}
-    <img src="{{ profile.profile_photo.url }}" alt="" style="width:44px; height:44px; border-radius:50%; object-fit:cover;">
+    <img src="{{ profile.profile_photo.url }}" alt="" class="profile-avatar-lg" id="header-photo-preview">
+    {% else %}
+    <div class="profile-avatar-lg-placeholder" id="header-photo-preview">{{ user.get_full_name|default:user.username|first|upper }}</div>
     {% endif %}
-    My Profile
-  </h1>
+    <div>
+      <h1 style="margin:0;">{{ user.get_full_name|default:user.username }}</h1>
+      <p style="margin:4px 0 0; color:var(--grey-500); font-size:0.9rem;">{{ user.get_role_display }} &middot; ID: {{ user.employee_id|default:"-" }}</p>
+    </div>
+  </div>
   {% if can_apply_resignation %}
     {% if pending_resignation.status == 'PENDING' %}
     <span class="badge badge-warning">Resignation Pending HR Review</span>
@@ -51,34 +56,128 @@
 {% endif %}
 
 <div class="card">
-  {% if form.errors %}
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">
+    <h3 style="margin:0;">Basic Details</h3>
+    <button type="button" class="btn btn-outline btn-sm" id="toggle-edit-btn">Edit</button>
+  </div>
+
+  {% if form.errors or bank_form.errors %}
   <ul class="messages"><li class="error">Please fix the highlighted fields below.</li></ul>
   {% endif %}
-  <form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
-      <div><label>First Name</label>{{ form.first_name }}{% if form.first_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.first_name.errors.0 }}</p>{% endif %}</div>
-      <div><label>Last Name</label>{{ form.last_name }}{% if form.last_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.last_name.errors.0 }}</p>{% endif %}</div>
-      <div><label>Phone</label>
-        <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.phone_country_code }}{{ form.phone }}</div>
-        {% if form.phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.phone.errors.0 }}</p>{% endif %}
-      </div>
-      <div><label>Profile Photo</label>{{ form.profile_photo }}</div>
+
+  <!-- ---------- Always-static, HR-managed fields ---------- -->
+  <div class="info-grid" style="grid-template-columns:1fr 1fr 1fr; margin:18px 0 24px;">
+    <div><label class="field-label">Enrollment ID</label><p class="field-value">{{ profile.enrollment_id|default:"-" }}</p></div>
+    <div><label class="field-label">Employee ID</label><p class="field-value">{{ user.employee_id|default:"-" }}</p></div>
+    <div><label class="field-label">Designation</label><p class="field-value">{{ profile.designation|default:"-" }}</p></div>
+    <div><label class="field-label">Department</label><p class="field-value">{{ user.department|default:"-" }}</p></div>
+    <div><label class="field-label">Branch</label><p class="field-value">{{ user.branch|default:"-" }}</p></div>
+    <div><label class="field-label">Date of Joining</label><p class="field-value">{{ user.date_joined_company|default:"-" }}</p></div>
+    <div><label class="field-label">Employment Status</label><p class="field-value">{{ profile.get_employment_status_display|default:"-" }}</p></div>
+    <div><label class="field-label">Shift</label><p class="field-value">{{ profile.get_shift_display|default:"-" }}</p></div>
+    <div><label class="field-label">Type</label><p class="field-value">{{ profile.get_work_type_display|default:"-" }}</p></div>
+    <div><label class="field-label">PF Status</label><p class="field-value">{% if profile.is_pf_applicable %}PF{% else %}Non-PF{% endif %}</p></div>
+    <div><label class="field-label">ID Card Received</label><p class="field-value">{% if profile.id_card_received %}Yes{% else %}No{% endif %}</p></div>
+    <div><label class="field-label">Blood Group</label><p class="field-value">{{ profile.blood_group|default:"-" }}</p></div>
+  </div>
+
+  <hr style="border:none; border-top:1px solid var(--grey-100); margin:0 0 24px;">
+
+  <!-- ---------- Editable section: VIEW mode (default) ---------- -->
+  <div id="profile-view-mode">
+    <h4 style="margin:0 0 12px; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--grey-500);">Personal Info</h4>
+    <div class="info-grid" style="grid-template-columns:1fr 1fr 1fr; margin-bottom:22px;">
+      <div><label class="field-label">First Name</label><p class="field-value">{{ user.first_name|default:"-" }}</p></div>
+      <div><label class="field-label">Last Name</label><p class="field-value">{{ user.last_name|default:"-" }}</p></div>
+      <div><label class="field-label">Phone</label><p class="field-value">{% if user.phone %}{{ user.phone_country_code }} {{ user.phone }}{% else %}-{% endif %}</p></div>
+      <div><label class="field-label">Date of Birth</label><p class="field-value">{{ profile.date_of_birth|default:"-" }}</p></div>
+      <div><label class="field-label">Gender</label><p class="field-value">{{ profile.get_gender_display|default:"-" }}</p></div>
+      <div><label class="field-label">Marital Status</label><p class="field-value">{{ profile.get_marital_status_display|default:"-" }}</p></div>
+      <div><label class="field-label">Qualification</label><p class="field-value">{{ profile.qualification|default:"-" }}</p></div>
+      <div style="grid-column:1 / -1;"><label class="field-label">Address</label><p class="field-value">{{ profile.address|default:"-" }}</p></div>
     </div>
-    <label>Address</label>{{ form.address }}
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
-      <div><label>Bank Account</label>{{ form.bank_account }}{% if form.bank_account.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.bank_account.errors.0 }}</p>{% endif %}</div>
-      <div><label>IFSC Code</label>{{ form.ifsc_code }}{% if form.ifsc_code.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.ifsc_code.errors.0 }}</p>{% endif %}</div>
-      <div><label>PAN No.</label>{{ form.pan_no }}{% if form.pan_no.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.pan_no.errors.0 }}</p>{% endif %}</div>
-      <div><label>Aadhar No.</label>{{ form.aadhar_no }}{% if form.aadhar_no.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.aadhar_no.errors.0 }}</p>{% endif %}</div>
-      <div><label>Emergency Contact Name</label>{{ form.emergency_contact_name }}{% if form.emergency_contact_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.emergency_contact_name.errors.0 }}</p>{% endif %}</div>
-      <div><label>Emergency Contact Phone</label>
-        <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.emergency_contact_country_code }}{{ form.emergency_contact_phone }}</div>
-        {% if form.emergency_contact_phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.emergency_contact_phone.errors.0 }}</p>{% endif %}
-      </div>
+
+    <h4 style="margin:0 0 12px; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--grey-500);">Statutory IDs</h4>
+    <div class="info-grid" style="grid-template-columns:1fr 1fr; margin-bottom:22px;">
+      <div><label class="field-label">Aadhar Number</label><p class="field-value">{{ profile.aadhar_display }}</p></div>
+      <div><label class="field-label">PAN Number</label><p class="field-value">{{ profile.pan_no|default:"-" }}</p></div>
+      <div><label class="field-label">UAN / PF Number</label><p class="field-value">{{ profile.uan_pf_number|default:"-" }}</p></div>
+      <div><label class="field-label">ESI Number</label><p class="field-value">{{ profile.esi_number|default:"-" }}</p></div>
     </div>
-    <button type="submit" class="btn btn-primary">Save Changes</button>
-  </form>
+
+    <h4 style="margin:0 0 12px; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--grey-500);">Bank Details</h4>
+    <div class="info-grid" style="grid-template-columns:1fr 1fr;">
+      <div><label class="field-label">Account Holder Name</label><p class="field-value">{{ bank_detail.account_holder_name|default:"-" }}</p></div>
+      <div><label class="field-label">Account Number</label><p class="field-value">{{ bank_detail.account_number|default:"-" }}</p></div>
+      <div><label class="field-label">IFSC Code</label><p class="field-value">{{ bank_detail.ifsc_code|default:"-" }}</p></div>
+      <div><label class="field-label">Bank Name</label><p class="field-value">{{ bank_detail.bank_name|default:"-" }}</p></div>
+      <div><label class="field-label">Branch Name</label><p class="field-value">{{ bank_detail.branch_name|default:"-" }}</p></div>
+    </div>
+  </div>
+
+  <!-- ---------- Editable section: EDIT mode (hidden until "Edit" clicked) ---------- -->
+  <div id="profile-edit-mode" style="display:none;">
+    <form method="post" enctype="multipart/form-data" id="profile-edit-form">
+      {% csrf_token %}
+
+      <h4 style="margin:0 0 10px; font-size:0.95rem; color:var(--grey-700);">Profile Photo</h4>
+      <div class="photo-edit-wrap">
+        <div class="photo-edit-preview" id="photo-preview-circle">
+          {% if profile.profile_photo %}
+          <img src="{{ profile.profile_photo.url }}" alt="">
+          {% else %}
+          <div class="photo-edit-placeholder-letter">{{ user.get_full_name|default:user.username|first|upper }}</div>
+          {% endif %}
+        </div>
+        <div class="photo-edit-actions">
+          <button type="button" class="btn btn-outline btn-sm" id="photo-change-btn">Change Photo</button>
+          <button type="button" class="btn btn-danger btn-sm" id="photo-remove-btn" {% if not profile.profile_photo %}style="display:none;"{% endif %}>Remove Photo</button>
+        </div>
+        <div style="display:none;">{{ form.profile_photo }}</div>
+      </div>
+
+      <h4 style="margin:18px 0 10px; font-size:0.95rem; color:var(--grey-700);">Personal Info</h4>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+        <div><label>First Name</label>{{ form.first_name }}{% if form.first_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.first_name.errors.0 }}</p>{% endif %}</div>
+        <div><label>Last Name</label>{{ form.last_name }}{% if form.last_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.last_name.errors.0 }}</p>{% endif %}</div>
+        <div><label>Phone</label>
+          <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.phone_country_code }}{{ form.phone }}</div>
+          {% if form.phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.phone.errors.0 }}</p>{% endif %}
+        </div>
+        <div><label>Date of Birth</label>{{ form.date_of_birth }}</div>
+        <div><label>Gender</label>{{ form.gender }}</div>
+        <div><label>Marital Status</label>{{ form.marital_status }}</div>
+        <div><label>Qualification</label>{{ form.qualification }}</div>
+      </div>
+      <label>Address</label>{{ form.address }}
+
+      <h4 style="margin:18px 0 10px; font-size:0.95rem; color:var(--grey-700);">Statutory IDs</h4>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+        <div><label>Aadhar Number</label>{{ form.aadhar_no }}{% if form.aadhar_no.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.aadhar_no.errors.0 }}</p>{% endif %}</div>
+        <div><label>PAN Number</label>{{ form.pan_no }}{% if form.pan_no.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.pan_no.errors.0 }}</p>{% endif %}</div>
+        <div><label>UAN / PF Number</label>{{ form.uan_pf_number }}</div>
+        <div><label>ESI Number</label>{{ form.esi_number }}</div>
+      </div>
+
+      <h4 style="margin:18px 0 10px; font-size:0.95rem; color:var(--grey-700);">Bank Details</h4>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+        <div><label>Account Holder Name</label>{{ bank_form.account_holder_name }}</div>
+        <div><label>Account Number</label>{{ bank_form.account_number }}{% if bank_form.account_number.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ bank_form.account_number.errors.0 }}</p>{% endif %}</div>
+        <div><label>IFSC Code</label>{{ bank_form.ifsc_code }}{% if bank_form.ifsc_code.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ bank_form.ifsc_code.errors.0 }}</p>{% endif %}</div>
+        <div><label>Bank Name</label>{{ bank_form.bank_name }}</div>
+        <div><label>Branch Name</label>{{ bank_form.branch_name }}</div>
+      </div>
+
+      <p style="color:var(--grey-500); font-size:0.8rem; margin-top:-8px;">
+        Emergency contact, designation, department, employment status and references are managed by HR / your Manager — ask them to update these for you.
+      </p>
+
+      <div style="display:flex; gap:10px; margin-top:6px;">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <button type="button" class="btn btn-outline" id="cancel-edit-btn">Cancel</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <div class="card">
@@ -86,7 +185,19 @@
   <table>
     <tr><th>Type</th><th>Uploaded</th><th></th></tr>
     {% for doc in documents %}
-    <tr><td>{{ doc.get_doc_type_display }}</td><td>{{ doc.uploaded_at|date:"d M Y" }}</td><td><a href="{{ doc.file.url }}" class="btn btn-outline btn-sm">View</a></td></tr>
+    <tr>
+      <td>{{ doc.get_doc_type_display }}</td>
+      <td>{{ doc.uploaded_at|date:"d M Y" }}</td>
+      <td>
+        <div class="doc-row-actions">
+          <a href="{{ doc.file.url }}" class="btn btn-outline btn-sm">View</a>
+          <form method="post" action="{% url 'employees:delete_own_document' doc.id %}" style="margin:0;" onsubmit="return confirm('Delete this document? You can upload a replacement right after.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+          </form>
+        </div>
+      </td>
+    </tr>
     {% empty %}<tr><td colspan="3" class="empty-state">No documents uploaded yet.</td></tr>{% endfor %}
   </table>
   <form method="post" action="{% url 'employees:upload_own_document' %}" enctype="multipart/form-data" style="margin-top:14px; display:flex; gap:10px; align-items:end;">
@@ -96,7 +207,182 @@
     <button type="submit" class="btn btn-accent" style="margin-bottom:14px;">Upload</button>
   </form>
   <p style="color:var(--grey-500); font-size:0.8rem; margin:6px 0 0;">
-    Upload your own personal documents here (degree certificate, PAN, Aadhar, ID proof, etc.)
+    Upload your own personal documents here (degree certificate, PAN, Aadhar, ID proof, etc.) To replace one — e.g. an updated Aadhar scan — delete the old entry above, then upload the new file with the same type.
   </p>
 </div>
+
+<!-- Crop/zoom/pan preview shown after picking a new photo, before it's saved -->
+<div class="modal-overlay" id="photo-crop-modal" style="display:none;">
+  <div class="modal-box" style="width:340px;">
+    <h3 style="margin:0 0 4px;">Adjust Your Photo</h3>
+    <p class="photo-crop-hint">Drag to reposition &middot; use the slider to zoom</p>
+    <div class="photo-crop-canvas-wrap">
+      <canvas id="photo-crop-canvas" width="260" height="260"></canvas>
+    </div>
+    <label style="margin-top:10px;">Zoom</label>
+    <input type="range" id="photo-crop-zoom" min="100" max="300" value="100" style="width:100%;">
+    <div style="display:flex; gap:10px; margin-top:18px; justify-content:flex-end;">
+      <button type="button" class="btn btn-outline btn-sm" id="photo-crop-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary btn-sm" id="photo-crop-save">Use This Photo</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var toggleBtn = document.getElementById('toggle-edit-btn');
+  var cancelBtn = document.getElementById('cancel-edit-btn');
+  var viewMode = document.getElementById('profile-view-mode');
+  var editMode = document.getElementById('profile-edit-mode');
+
+  function showEdit() {
+    viewMode.style.display = 'none';
+    editMode.style.display = '';
+    toggleBtn.style.display = 'none';
+  }
+  function showView() {
+    viewMode.style.display = '';
+    editMode.style.display = 'none';
+    toggleBtn.style.display = '';
+  }
+
+  toggleBtn.addEventListener('click', showEdit);
+  if (cancelBtn) cancelBtn.addEventListener('click', showView);
+
+  {% if form.errors or bank_form.errors %}
+  // If the save attempt failed validation, land back in edit mode
+  // showing the errors, instead of silently switching to read-only.
+  showEdit();
+  {% endif %}
+})();
+</script>
+
+<script>
+(function () {
+  var form = document.getElementById('profile-edit-form');
+  if (!form) return;
+
+  var fileInput = form.querySelector('input[name="profile_photo"][type="file"]');
+  var clearCheckbox = form.querySelector('input[name="profile_photo-clear"]');
+  var changeBtn = document.getElementById('photo-change-btn');
+  var removeBtn = document.getElementById('photo-remove-btn');
+  var previewCircle = document.getElementById('photo-preview-circle');
+  var headerPreview = document.getElementById('header-photo-preview');
+  var modal = document.getElementById('photo-crop-modal');
+  var canvas = document.getElementById('photo-crop-canvas');
+  var ctx = canvas ? canvas.getContext('2d') : null;
+  var zoomSlider = document.getElementById('photo-crop-zoom');
+  var cropCancelBtn = document.getElementById('photo-crop-cancel');
+  var cropSaveBtn = document.getElementById('photo-crop-save');
+  var placeholderLetter = "{{ user.get_full_name|default:user.username|first|upper|escapejs }}";
+
+  if (!fileInput || !changeBtn || !canvas) return;
+
+  var CANVAS_SIZE = canvas.width;
+  var img = null, imgLoaded = false;
+  var baseScale = 1, zoom = 1, offsetX = 0, offsetY = 0;
+  var dragging = false, dragStartX = 0, dragStartY = 0, startOffsetX = 0, startOffsetY = 0;
+
+  changeBtn.addEventListener('click', function () { fileInput.click(); });
+
+  fileInput.addEventListener('change', function () {
+    var file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      img = new Image();
+      img.onload = function () {
+        imgLoaded = true;
+        baseScale = Math.max(CANVAS_SIZE / img.width, CANVAS_SIZE / img.height);
+        zoom = 1;
+        offsetX = 0;
+        offsetY = 0;
+        zoomSlider.value = 100;
+        drawCanvas();
+        modal.style.display = 'flex';
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  function drawCanvas() {
+    if (!imgLoaded) return;
+    ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    var scale = baseScale * zoom;
+    var w = img.width * scale;
+    var h = img.height * scale;
+    var x = (CANVAS_SIZE - w) / 2 + offsetX;
+    var y = (CANVAS_SIZE - h) / 2 + offsetY;
+    ctx.drawImage(img, x, y, w, h);
+  }
+
+  zoomSlider.addEventListener('input', function () {
+    zoom = zoomSlider.value / 100;
+    drawCanvas();
+  });
+
+  function startDrag(clientX, clientY) {
+    dragging = true;
+    dragStartX = clientX;
+    dragStartY = clientY;
+    startOffsetX = offsetX;
+    startOffsetY = offsetY;
+  }
+  function moveDrag(clientX, clientY) {
+    if (!dragging) return;
+    offsetX = startOffsetX + (clientX - dragStartX);
+    offsetY = startOffsetY + (clientY - dragStartY);
+    drawCanvas();
+  }
+  function endDrag() { dragging = false; }
+
+  canvas.addEventListener('mousedown', function (e) { startDrag(e.clientX, e.clientY); });
+  window.addEventListener('mousemove', function (e) { moveDrag(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', endDrag);
+  canvas.addEventListener('touchstart', function (e) {
+    var t = e.touches[0]; startDrag(t.clientX, t.clientY);
+  }, { passive: true });
+  canvas.addEventListener('touchmove', function (e) {
+    var t = e.touches[0]; moveDrag(t.clientX, t.clientY);
+  }, { passive: true });
+  canvas.addEventListener('touchend', endDrag);
+
+  cropCancelBtn.addEventListener('click', function () {
+    fileInput.value = '';
+    imgLoaded = false;
+    modal.style.display = 'none';
+  });
+
+  cropSaveBtn.addEventListener('click', function () {
+    if (!imgLoaded) { modal.style.display = 'none'; return; }
+    canvas.toBlob(function (blob) {
+      if (!blob) return;
+      var newFile = new File([blob], 'profile_photo.jpg', { type: 'image/jpeg' });
+      try {
+        var dt = new DataTransfer();
+        dt.items.add(newFile);
+        fileInput.files = dt.files;
+      } catch (err) {
+        // Older browsers without DataTransfer support simply keep the
+        // originally-picked file; the crop is still shown as a preview.
+      }
+      var url = URL.createObjectURL(blob);
+      previewCircle.innerHTML = '<img src="' + url + '" alt="">';
+      if (headerPreview) headerPreview.outerHTML = '<img src="' + url + '" alt="" class="profile-avatar-lg" id="header-photo-preview">';
+      if (clearCheckbox) clearCheckbox.checked = false;
+      removeBtn.style.display = '';
+      modal.style.display = 'none';
+    }, 'image/jpeg', 0.92);
+  });
+
+  removeBtn.addEventListener('click', function () {
+    if (!confirm('Remove your profile photo?')) return;
+    fileInput.value = '';
+    if (clearCheckbox) clearCheckbox.checked = true;
+    previewCircle.innerHTML = '<div class="photo-edit-placeholder-letter">' + placeholderLetter + '</div>';
+    removeBtn.style.display = 'none';
+  });
+})();
+</script>
 {% endblock %}

@@ -1,9 +1,8 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
-from core.validators import COUNTRY_CODES
+from core.validators import COUNTRY_CODES, phone_validator, bank_account_validator, ifsc_validator
 from datetime import timedelta
-
 
 
 class EmployeeProfile(models.Model):
@@ -11,6 +10,43 @@ class EmployeeProfile(models.Model):
         ('ONBOARDING', 'Onboarding'),
         ('ACTIVE', 'Active'),
         ('EXITED', 'Exited'),
+    ]
+
+    GENDER_CHOICES = [('MALE', 'Male'), ('FEMALE', 'Female')]
+
+    MARITAL_STATUS_CHOICES = [
+        ('SINGLE', 'Single'),
+        ('MARRIED', 'Married'),
+        ('OTHER', 'Other'),
+    ]
+
+    SHIFT_CHOICES = [
+        ('GENERAL', 'General Shift'),
+        ('FIRST', 'First Shift'),
+        ('SECOND', 'Second Shift'),
+        ('NIGHT', 'Night Shift'),
+    ]
+
+    WORK_TYPE_CHOICES = [
+        ('WFH', 'Work From Home'),
+        ('OFFICE', 'In Office'),
+    ]
+
+    EMPLOYMENT_STATUS_CHOICES = [
+        ('PERMANENT', 'Permanent'),
+        ('PROBATION', 'Probation Period'),
+    ]
+
+    BLOOD_GROUP_CHOICES = [
+        ('A+', 'A+'), ('A-', 'A-'),
+        ('B+', 'B+'), ('B-', 'B-'),
+        ('AB+', 'AB+'), ('AB-', 'AB-'),
+        ('O+', 'O+'), ('O-', 'O-'),
+    ]
+
+    REFERENCE_TYPE_CHOICES = [
+        ('FACULTY', 'College Faculty'),
+        ('COMPANY', 'Previous Company'),
     ]
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
@@ -26,10 +62,45 @@ class EmployeeProfile(models.Model):
     emergency_contact_phone = models.CharField(max_length=10, blank=True)
     profile_photo = models.ImageField(upload_to='profile_photos/', null=True, blank=True)
 
+    # ---- Identity / HR fields (HR, Admin, Manager editable only) ----
+    # Branch-prefixed IDs. enrollment_id: TRB01/02/03/04-####. User.employee_id
+    # (existing field) is repurposed to hold the SPSB01/02/03/04-#### id.
+    enrollment_id = models.CharField(max_length=20, unique=True, null=True, blank=True)
+
+    is_pf_applicable = models.BooleanField(default=True, verbose_name="PF Applicable")
+    id_card_received = models.BooleanField(default=False, verbose_name="ID Card Received")
+    shift = models.CharField(max_length=10, choices=SHIFT_CHOICES, blank=True)
+    work_type = models.CharField(max_length=10, choices=WORK_TYPE_CHOICES, blank=True)
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
+    marital_status = models.CharField(max_length=10, choices=MARITAL_STATUS_CHOICES, blank=True)
+    qualification = models.CharField(max_length=200, blank=True)
+    previous_experience = models.CharField(max_length=200, blank=True, help_text="e.g. 2 years at XYZ Corp")
+    current_company_experience = models.CharField(max_length=100, blank=True, help_text="e.g. 1.5 years")
+    employment_status = models.CharField(max_length=10, choices=EMPLOYMENT_STATUS_CHOICES, default='PROBATION')
+    uan_pf_number = models.CharField(max_length=30, blank=True, verbose_name="UAN / PF Number")
+    esi_number = models.CharField(max_length=30, blank=True, verbose_name="ESI Number")
+    blood_group = models.CharField(max_length=5, choices=BLOOD_GROUP_CHOICES, blank=True)
+
+    referred_by_name = models.CharField(max_length=150, blank=True)
+    referred_by_enrollment_id = models.CharField(max_length=20, blank=True, verbose_name="Referred By (Enrollment No.)")
+
+    reference1_name = models.CharField(max_length=150, blank=True, verbose_name="Reference 1 Name")
+    reference1_type = models.CharField(max_length=10, choices=REFERENCE_TYPE_CHOICES, blank=True, verbose_name="Reference 1 Type")
+    reference1_contact = models.CharField(max_length=10, blank=True, validators=[phone_validator], verbose_name="Reference 1 Contact")
+
+    reference2_name = models.CharField(max_length=150, blank=True, verbose_name="Reference 2 Name (Relative)")
+    reference2_relation = models.CharField(max_length=100, blank=True, verbose_name="Reference 2 Relation")
+    reference2_contact = models.CharField(max_length=10, blank=True, validators=[phone_validator], verbose_name="Reference 2 Contact")
+
+    # Rejoin tracking: when someone who exited comes back, the fresh
+    # date_joined_company reflects the new stint while old_joining_date
+    # preserves the date they originally joined before resigning.
+    old_joining_date = models.DateField(null=True, blank=True, help_text="Original joining date, preserved automatically if this employee resigned and later rejoined.")
+
     # Status now only ever changes via two automated workflows: HR marking
     # onboarding complete (ONBOARDING -> ACTIVE), and HR accepting a
-    # resignation request (-> EXITED, see ResignationRequest.accept()).
-    # HR never edits this field directly on the employee detail page.
+    # resignation request (-> EXITED, see ResignationRequest.accept()), or
+    # HR manually re-activating a rejoining employee.
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ONBOARDING')
 
     # Only ever set by ResignationRequest.accept() below.
@@ -38,6 +109,26 @@ class EmployeeProfile(models.Model):
 
     def __str__(self):
         return str(self.user)
+
+    @property
+    def aadhar_display(self):
+        """Aadhar shown grouped as XXXX XXXX XXXX; stored as a plain 12-digit string."""
+        digits = (self.aadhar_no or '').replace(' ', '')
+        return ' '.join(digits[i:i + 4] for i in range(0, len(digits), 4)) if digits else '-'
+
+
+class BankDetail(models.Model):
+    """Salary account details — HR/Admin/Manager editable only, visible to
+    the employee on their own profile."""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='bank_detail')
+    account_holder_name = models.CharField(max_length=150, blank=True)
+    account_number = models.CharField(max_length=18, blank=True, validators=[bank_account_validator])
+    ifsc_code = models.CharField(max_length=11, blank=True, validators=[ifsc_validator])
+    bank_name = models.CharField(max_length=150, blank=True)
+    branch_name = models.CharField(max_length=150, blank=True)
+
+    def __str__(self):
+        return f"Bank details - {self.user}"
 
 
 class EmployeeDocument(models.Model):
@@ -75,6 +166,7 @@ class EmployeeDocument(models.Model):
 
     def __str__(self):
         return f"{self.get_doc_type_display()} - {self.user}"
+
 
 class ResignationRequest(models.Model):
     """Employee/Manager/Admin submits just a reason. HR then approves

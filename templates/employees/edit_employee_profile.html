@@ -1,7 +1,14 @@
 {% extends 'core/base.html' %}
 {% block content %}
 <div class="page-header">
-  <h1>Edit - {{ emp_user.get_full_name|default:emp_user.username }}</h1>
+  <div style="display:flex; align-items:center; gap:14px;">
+    {% if profile.profile_photo %}
+    <img src="{{ profile.profile_photo.url }}" alt="" class="profile-avatar-sm">
+    {% else %}
+    <div class="profile-avatar-sm-placeholder">{{ emp_user.get_full_name|default:emp_user.username|first|upper }}</div>
+    {% endif %}
+    <h1 style="margin:0;">Edit - {{ emp_user.get_full_name|default:emp_user.username }}</h1>
+  </div>
   <a href="{% url 'employees:employee_detail' emp_user.id %}" class="btn btn-outline btn-sm">&larr; Back to View</a>
 </div>
 
@@ -9,46 +16,145 @@
   {% csrf_token %}
 </form>
 
-<div class="card">
-  <h3>Profile</h3>
-  {% if form.errors %}
-  <ul class="messages"><li class="error">Please fix the highlighted fields below.</li></ul>
-  {% endif %}
-  <form method="post">
-    {% csrf_token %}
+<form method="post" id="main-profile-form">
+  {% csrf_token %}
+
+  <div class="card">
+    <h3>Identity</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div>
+        <label>Enrollment ID</label>
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">
+          <span class="form-control" style="max-width:110px; background:var(--grey-50); text-align:center; flex-shrink:0; margin-bottom:0;">{{ enrollment_prefix }}</span>
+          <input type="text" name="enrollment_suffix" class="form-control" style="margin-bottom:0;"
+                 value="{{ enrollment_suffix }}" placeholder="0001" maxlength="6"
+                 oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+        </div>
+      </div>
+      <div>
+        <label>Employee ID</label>
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">
+          <span class="form-control" style="max-width:110px; background:var(--grey-50); text-align:center; flex-shrink:0; margin-bottom:0;">{{ employee_id_prefix }}</span>
+          <input type="text" name="employee_id_suffix" class="form-control" style="margin-bottom:0;"
+                 value="{{ employee_id_suffix }}" placeholder="0001" maxlength="6"
+                 oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Profile</h3>
+    {% if form.errors or identity_form.errors or bank_form.errors %}
+    <ul class="messages"><li class="error">Please fix the highlighted fields below.</li></ul>
+    {% endif %}
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
       <div><label>First Name</label>{{ form.first_name }}{% if form.first_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.first_name.errors.0 }}</p>{% endif %}</div>
       <div><label>Last Name</label>{{ form.last_name }}{% if form.last_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.last_name.errors.0 }}</p>{% endif %}</div>
       <div><label>Email</label>{{ form.email }}{% if form.email.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.email.errors.0 }}</p>{% endif %}</div>
-      <div><label>Employee ID</label>{{ form.employee_id }}{% if form.employee_id.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.employee_id.errors.0 }}</p>{% endif %}</div>
       <div><label>Department</label>{{ form.department }}</div>
       <div><label>Branch</label>{{ form.branch }}</div>
       <div><label>Phone</label>
         <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.phone_country_code }}{{ form.phone }}</div>
         {% if form.phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.phone.errors.0 }}</p>{% endif %}
       </div>
-      <div><label>Joining Date</label>{{ form.date_joined_company }}</div>
+      <div><label>Date of Joining</label>{{ form.date_joined_company }}</div>
+      <div><label>Designation / Role</label>{{ identity_form.designation }}</div>
+      <div><label>Gender</label>{{ identity_form.gender }}</div>
+      <div><label>Marital Status</label>{{ identity_form.marital_status }}</div>
+      <div><label>Date of Birth</label>{{ identity_form.date_of_birth }}</div>
+      <div><label>Blood Group</label>{{ identity_form.blood_group }}</div>
+      <div><label>Qualification</label>{{ identity_form.qualification }}</div>
+      <div><label>Previous Experience</label>{{ identity_form.previous_experience }}</div>
+      <div><label>Experience (Current Company)</label>{{ identity_form.current_company_experience }}</div>
+      <div><label>Employment Status</label>{{ identity_form.employment_status }}</div>
+      <div><label>Shift</label>{{ identity_form.shift }}</div>
+      <div><label>Type</label>{{ identity_form.work_type }}</div>
     </div>
-
-    <div style="margin-top:8px; padding-top:20px; border-top:1px solid var(--grey-100);">
-      <button type="submit" class="btn btn-primary">Save Profile</button>
-    </div>
-  </form>
-
-  <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--grey-100);">
-    <label>Employment Status</label>
-    <div style="display:flex; gap:10px; align-items:center; max-width:400px;">
-      <select name="status" form="status-update-form" class="form-control" style="margin-bottom:0;">
-        <option value="ONBOARDING" {% if profile.status == 'ONBOARDING' %}selected{% endif %}>Onboarding</option>
-        <option value="ACTIVE" {% if profile.status == 'ACTIVE' %}selected{% endif %}>Active</option>
-        <option value="EXITED" {% if profile.status == 'EXITED' %}selected{% endif %}>Exited</option>
-      </select>
-      <button type="submit" form="status-update-form" class="btn btn-accent" style="flex-shrink:0;">Update Status</button>
+    <div style="display:flex; gap:24px; margin:6px 0 14px; flex-wrap:wrap;">
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600; margin:0;">{{ identity_form.is_pf_applicable }} PF Applicable</label>
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600; margin:0;">{{ identity_form.id_card_received }} ID Card Received</label>
     </div>
   </div>
+
+  <div class="card">
+    <h3>Contact &amp; Statutory IDs</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>Aadhar Number</label>{{ identity_form.aadhar_no }}{% if identity_form.aadhar_no.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ identity_form.aadhar_no.errors.0 }}</p>{% endif %}</div>
+      <div><label>PAN Number</label>{{ identity_form.pan_no }}{% if identity_form.pan_no.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ identity_form.pan_no.errors.0 }}</p>{% endif %}</div>
+      <div><label>UAN / PF Number</label>{{ identity_form.uan_pf_number }}</div>
+      <div><label>ESI Number</label>{{ identity_form.esi_number }}</div>
+      <div><label>Emergency Contact Name</label>{{ identity_form.emergency_contact_name }}</div>
+      <div><label>Emergency Contact Phone</label>
+        <div style="display:flex; gap:8px; margin-bottom:14px;">{{ identity_form.emergency_contact_country_code }}{{ identity_form.emergency_contact_phone }}</div>
+      </div>
+      <div style="grid-column:1 / -1;"><label>Address</label>{{ form.address }}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Reference Details</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>Referred By (Name)</label>{{ identity_form.referred_by_name }}</div>
+      <div><label>Referred By (Enrollment No.)</label>{{ identity_form.referred_by_enrollment_id }}</div>
+      <div><label>Reference 1 Name</label>{{ identity_form.reference1_name }}</div>
+      <div><label>Reference 1 Type</label>{{ identity_form.reference1_type }}</div>
+      <div><label>Reference 1 Contact</label>{{ identity_form.reference1_contact }}</div>
+      <div><label>Reference 2 Name (Relative)</label>{{ identity_form.reference2_name }}</div>
+      <div><label>Reference 2 Relation</label>{{ identity_form.reference2_relation }}</div>
+      <div><label>Reference 2 Contact</label>{{ identity_form.reference2_contact }}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Bank Details</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>Account Holder Name</label>{{ bank_form.account_holder_name }}</div>
+      <div><label>Account Number</label>{{ bank_form.account_number }}{% if bank_form.account_number.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ bank_form.account_number.errors.0 }}</p>{% endif %}</div>
+      <div><label>IFSC Code</label>{{ bank_form.ifsc_code }}{% if bank_form.ifsc_code.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ bank_form.ifsc_code.errors.0 }}</p>{% endif %}</div>
+      <div><label>Bank Name</label>{{ bank_form.bank_name }}</div>
+      <div><label>Branch Name</label>{{ bank_form.branch_name }}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Rejoin / Exit Tracking</h3>
+    <p style="color:var(--grey-700); font-size:0.85rem; margin-top:0;">
+      Original joining date is auto-filled the moment this employee's status is moved from Exited back to Active (a rejoin). You can adjust it here if needed.
+    </p>
+    <div style="max-width:260px;">
+      <label>Original Joining Date (if rejoined)</label>
+      {{ identity_form.old_joining_date }}
+    </div>
+    {% if profile.exit_date %}
+    <div style="display:flex; gap:32px; flex-wrap:wrap; margin-top:6px;">
+      <div><label style="margin:0 0 2px;">Last Resign Date</label><p style="margin:0; font-weight:600;">{{ profile.exit_date }}</p></div>
+      <div><label style="margin:0 0 2px;">Last Resign Reason</label><p style="margin:0; font-weight:600;">{{ profile.exit_reason|default:"-"|truncatewords:15 }}</p></div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="updatebutton">
+    <button type="submit" class="btn btn-primary">Save All Profile Changes</button>
+  </div>
+</form>
+
+<div class="card">
+  <h3>Employment Status</h3>
+  <div style="display:flex; gap:10px; align-items:center; max-width:400px;">
+    <select name="status" form="status-update-form" class="form-control" style="margin-bottom:0;">
+      <option value="ONBOARDING" {% if profile.status == 'ONBOARDING' %}selected{% endif %}>Onboarding</option>
+      <option value="ACTIVE" {% if profile.status == 'ACTIVE' %}selected{% endif %}>Active{% if profile.status == 'EXITED' %} (Rejoin){% endif %}</option>
+      <option value="EXITED" {% if profile.status == 'EXITED' %}selected{% endif %}>Exited</option>
+    </select>
+    <button type="submit" form="status-update-form" class="btn btn-accent" style="flex-shrink:0;">Update Status</button>
+  </div>
+  <p style="color:var(--grey-500); font-size:0.8rem; margin:10px 0 0;">
+    Moving Exited &rarr; Active preserves their previous joining date automatically. Update "Date of Joining" above for the new stint afterwards.
+  </p>
 </div>
 
-{% if emp_user.role != 'ADMIN' %}
+{% if emp_user.role != 'ADMIN' and can_change_role %}
 <div class="card">
   <h3>Role &amp; Access</h3>
   <form method="post" action="{% url 'employees:change_role' emp_user.id %}" style="display:flex; gap:10px; align-items:end;">
@@ -85,7 +191,7 @@
       <div><label>Bonus (flat, monthly)</label>{{ salary_form.bonus }}{% if salary_form.bonus.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ salary_form.bonus.errors.0 }}</p>{% endif %}</div>
       <div><label>PF %</label>{{ salary_form.pf_percent }}{% if salary_form.pf_percent.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ salary_form.pf_percent.errors.0 }}</p>{% endif %}</div>
     </div>
-    <label><input type="checkbox" name="pf_applicable" {% if salary_form.instance.pf_applicable %}checked{% endif %}> PF Applicable</label>
+    <label><input type="checkbox" name="pf_applicable" {% if salary_form.instance.pf_applicable %}checked{% endif %}> PF Applicable (Payroll Calculation)</label>
     <button type="submit" class="btn btn-primary" style="margin-top:10px;">Save Salary</button>
   </form>
 </div>
