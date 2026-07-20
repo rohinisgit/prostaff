@@ -31,11 +31,11 @@ def punch(request):
         if action == 'in' and not record.in_time:
             record.in_time = now
             record.save()
-            messages.success(request, f"Punched in at {now.strftime('%I:%M %p')}")
+            messages.success(request, f"Punched in at {timezone.localtime(now).strftime('%I:%M %p')}")
         elif action == 'out' and record.in_time and not record.out_time:
             record.out_time = now
             record.save()
-            messages.success(request, f"Punched out at {now.strftime('%I:%M %p')}")
+            messages.success(request, f"Punched out at {timezone.localtime(now).strftime('%I:%M %p')}")
 
         regenerate_and_save_monthly_sheet(request.user, today.year, today.month)
         return redirect('attendance:punch')

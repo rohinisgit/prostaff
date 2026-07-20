@@ -3,7 +3,7 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone as dj_timezone
 
-SHIFT_START = time(9, 30)  # 9:30 AM shift start used for late detection
+SHIFT_START = time(9, 0)  # 9:30 AM shift start used for late detection
 NIGHT_START = time(22, 0)  # 10:00 PM
 NIGHT_END = time(6, 0)     # 6:00 AM
 
@@ -38,10 +38,10 @@ class AttendanceRecord(models.Model):
             self.total_hours = round(delta.total_seconds() / 3600, 2)
         if self.in_time:
             shift_start_dt = datetime.combine(self.date, SHIFT_START)
-            in_time_naive = self.in_time.replace(tzinfo=None) if self.in_time.tzinfo else self.in_time
-            if in_time_naive > shift_start_dt:
+            in_time_local = dj_timezone.localtime(self.in_time).replace(tzinfo=None)
+            if in_time_local > shift_start_dt:
                 self.is_late = True
-                self.late_minutes = int((in_time_naive - shift_start_dt).total_seconds() / 60)
+                self.late_minutes = int((in_time_local - shift_start_dt).total_seconds() / 60)
             else:
                 self.is_late = False
                 self.late_minutes = 0

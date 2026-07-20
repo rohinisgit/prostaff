@@ -70,17 +70,18 @@
       {% for label in day_labels %}
       <th>{{ label }}</th>
       {% endfor %}
-      <td style="text-align:center;">{{ s.total_days_worked }}</td>
-      <td style="text-align:center;">{{ s.cl_quota }}</td>
-      <td style="text-align:center;">{{ s.overtime_hours }}</td>
-      <td style="text-align:center;">{{ s.sunday_hours }}</td>
-      <td style="text-align:center;">{{ s.total_hours_worked }}</td>
-      <td style="text-align:center;">{{ s.actual_leave }}</td>
-      <td style="text-align:center;">{{ s.total_ph_sunday }}</td>
-      <td style="text-align:center; font-weight:600;">{{ s.total_days_to_pay }}</td>
-      <td style="text-align:center;">{{ s.days_in_month }}</td>
-      <td style="text-align:center;">{{ s.lop }}</td>
-      <td style="text-align:center;">{% if s.salary %}Rs. {{ s.salary }}{% else %}-{% endif %}</td>
+      <th>Days Worked</th>
+      <th>CL</th>
+      <th>Overtime (hrs)</th>
+      <th>Sunday Hrs</th>
+      <th>Total Hrs</th>
+      <th>Actual Leave</th>
+      <th>PH/Sunday</th>
+      <th>Total Days to Pay</th>
+      <th>Days in Month</th>
+      <th>LOP</th>
+      <th>Salary</th>
+      <th></th>
     </tr>
     {% for s in summaries %}
     <tr>
@@ -93,15 +94,15 @@
       {% endfor %}
       <td style="text-align:center;">{{ s.total_days_worked }}</td>
       <td style="text-align:center;">{{ s.cl_quota }}</td>
-      <td style="text-align:center;">{{ s.on_duty }}</td>
+      <td style="text-align:center;">{{ s.overtime_hours }}</td>
       <td style="text-align:center;">{{ s.sunday_hours }}</td>
       <td style="text-align:center;">{{ s.total_hours_worked }}</td>
-      <td style="text-align:center;">{{ s.wkd }}</td>
       <td style="text-align:center;">{{ s.actual_leave }}</td>
-      <td style="text-align:center;">{{ s.lop }}</td>
       <td style="text-align:center;">{{ s.total_ph_sunday }}</td>
+      <td style="text-align:center; font-weight:600;">{{ s.total_days_to_pay }}</td>
       <td style="text-align:center;">{{ s.days_in_month }}</td>
-      <td style="text-align:center;">{{ s.night_duty }}</td>
+      <td style="text-align:center;">{{ s.lop }}</td>
+      <td style="text-align:center;">{% if s.salary %}Rs. {{ s.salary }}{% else %}-{% endif %}</td>
       <td><a href="{% url 'attendance:employee_attendance_view' s.user.id %}?view=monthly&year={{ year }}&month={{ month }}" class="btn btn-outline btn-sm">Details</a></td>
     </tr>
     {% empty %}
