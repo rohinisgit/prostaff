@@ -1,14 +1,7 @@
 {% extends 'core/base.html' %}
 {% block content %}
 <div class="page-header">
-  <div style="display:flex; align-items:center; gap:14px;">
-    {% if profile.profile_photo %}
-    <img src="{{ profile.profile_photo.url }}" alt="" class="profile-avatar-sm">
-    {% else %}
-    <div class="profile-avatar-sm-placeholder">{{ emp_user.get_full_name|default:emp_user.username|first|upper }}</div>
-    {% endif %}
-    <h1 style="margin:0;">Edit - {{ emp_user.get_full_name|default:emp_user.username }}</h1>
-  </div>
+  <h1>Edit - {{ emp_user.get_full_name|default:emp_user.username }}</h1>
   <a href="{% url 'employees:employee_detail' emp_user.id %}" class="btn btn-outline btn-sm">&larr; Back to View</a>
 </div>
 
@@ -16,8 +9,23 @@
   {% csrf_token %}
 </form>
 
-<form method="post" id="main-profile-form">
+<form method="post" id="main-profile-form" enctype="multipart/form-data">
   {% csrf_token %}
+
+  <div class="card">
+    <h3>Profile Photo</h3>
+    <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+      {% if profile.profile_photo %}
+      <img src="{{ profile.profile_photo.url }}" alt="" style="width:110px; height:110px; border-radius:12px; object-fit:cover; border:1px solid var(--grey-100);">
+      {% else %}
+      <div style="width:110px; height:110px; border-radius:12px; background:var(--grey-100); display:flex; align-items:center; justify-content:center; color:var(--grey-500); font-size:0.8rem; text-align:center;">No Photo</div>
+      {% endif %}
+      <div style="flex:1; min-width:220px;">
+        <label>Upload / Change Photo</label>
+        {{ identity_form.profile_photo }}
+      </div>
+    </div>
+  </div>
 
   <div class="card">
     <h3>Identity</h3>
@@ -139,6 +147,7 @@
   </div>
 </form>
 
+{% if request.user.role == 'HR' or emp_user.role == 'HR' %}
 <div class="card">
   <h3>Employment Status</h3>
   <div style="display:flex; gap:10px; align-items:center; max-width:400px;">
@@ -153,6 +162,7 @@
     Moving Exited &rarr; Active preserves their previous joining date automatically. Update "Date of Joining" above for the new stint afterwards.
   </p>
 </div>
+{% endif %}
 
 {% if emp_user.role != 'ADMIN' and can_change_role %}
 <div class="card">
@@ -201,7 +211,17 @@
   <table>
     <tr><th>Type</th><th>Uploaded</th><th></th></tr>
     {% for doc in documents %}
-    <tr><td>{{ doc.get_doc_type_display }}</td><td>{{ doc.uploaded_at|date:"d M Y" }}</td><td><a href="{{ doc.file.url }}" class="btn btn-outline btn-sm">View</a></td></tr>
+    <tr>
+      <td>{{ doc.get_doc_type_display }}</td>
+      <td>{{ doc.uploaded_at|date:"d M Y" }}</td>
+      <td>
+        <a href="{{ doc.file.url }}" class="btn btn-outline btn-sm"style = "margin-right:2px;">View</a>
+        <form method="post" action="{% url 'employees:delete_document' emp_user.id doc.id %}" style="display:inline;" onsubmit="return confirm('Delete this document?');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger btn-sm" style = "margin-top: 5px; ">Delete</button>
+        </form>
+      </td>
+    </tr>
     {% empty %}<tr><td colspan="3" class="empty-state">No documents uploaded.</td></tr>{% endfor %}
   </table>
   <form method="post" action="{% url 'employees:upload_document' emp_user.id %}" enctype="multipart/form-data" style="margin-top:14px; display:flex; gap:10px; align-items:end;">

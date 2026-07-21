@@ -47,7 +47,7 @@
   </div>
   {% endif %}
 
-  {% if r.status == 'PENDING' and request.user.role == 'HR' %}
+  {% if r.status == 'PENDING' and r.can_review %}
   <div>
     <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
       <form method="post" action="{% url 'employees:reject_resignation' r.id %}" style="margin:0;">

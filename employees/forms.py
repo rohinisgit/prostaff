@@ -48,50 +48,30 @@ AADHAR_ATTRS = {
 
 class EmployeeSelfEditForm(forms.ModelForm):
     """Fields an employee is allowed to edit on their own profile.
-
-    Everything else (designation, employment status, shift, work type,
-    blood group, emergency contact, references, old joining date, etc.)
-    stays HR/Admin/Manager-only — see EmployeeIdentityForm.
-    """
+    Identity/HR fields (Aadhar, PAN, bank details, emergency contact, etc.)
+    are HR/Admin/Manager-only — see EmployeeIdentityForm and BankDetailForm."""
     first_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     last_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     phone_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
     phone = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
-    aadhar_no = forms.CharField(max_length=14, required=False, validators=[aadhar_validator], widget=forms.TextInput(attrs=AADHAR_ATTRS))
-    pan_no = forms.CharField(max_length=10, required=False, validators=[pan_validator], widget=forms.TextInput(attrs=PAN_ATTRS))
 
     class Meta:
         model = EmployeeProfile
-        fields = [
-            'address', 'profile_photo', 'date_of_birth', 'gender', 'marital_status',
-            'qualification', 'aadhar_no', 'pan_no', 'uan_pf_number', 'esi_number',
-        ]
+        fields = ['address', 'profile_photo']
         widgets = {
             'address': forms.Textarea(attrs={'rows': 3}),
-            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
         }
 
     def __init__(self, *args, **kwargs):
         self.user_instance = kwargs.pop('user_instance', None)
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            if not isinstance(field.widget, forms.CheckboxInput):
-                field.widget.attrs.setdefault('class', 'form-control')
+            field.widget.attrs.setdefault('class', 'form-control')
         if self.user_instance:
             self.fields['first_name'].initial = self.user_instance.first_name
             self.fields['last_name'].initial = self.user_instance.last_name
             self.fields['phone'].initial = self.user_instance.phone
             self.fields['phone_country_code'].initial = self.user_instance.phone_country_code
-        # Show Aadhar pre-formatted with spaces even though it's stored raw.
-        if self.instance and self.instance.pk and self.instance.aadhar_no:
-            digits = self.instance.aadhar_no
-            self.initial['aadhar_no'] = ' '.join(digits[i:i + 4] for i in range(0, len(digits), 4))
-
-    def clean_aadhar_no(self):
-        return self.cleaned_data.get('aadhar_no', '').replace(' ', '')
-
-    def clean_pan_no(self):
-        return self.cleaned_data.get('pan_no', '').upper()
 
     def save(self, commit=True):
         profile = super().save(commit=commit)
@@ -161,10 +141,7 @@ class HREmployeeEditForm(forms.ModelForm):
 
 class EmployeeIdentityForm(forms.ModelForm):
     """Extended identity / HR fields. Only ever reachable by HR, Admin, or
-    the employee's Manager — never editable by the employee themself.
-    (The employee-facing subset of these same underlying fields — Aadhar,
-    PAN, DOB, gender, marital status, qualification, UAN/PF, ESI — is also
-    self-editable via EmployeeSelfEditForm.)"""
+    the employee's Manager — never editable by the employee themself."""
     aadhar_no = forms.CharField(max_length=14, required=False, validators=[aadhar_validator], widget=forms.TextInput(attrs=AADHAR_ATTRS))
     pan_no = forms.CharField(max_length=10, required=False, validators=[pan_validator], widget=forms.TextInput(attrs=PAN_ATTRS))
     emergency_contact_name = forms.CharField(max_length=100, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
@@ -176,6 +153,7 @@ class EmployeeIdentityForm(forms.ModelForm):
     class Meta:
         model = EmployeeProfile
         fields = [
+            'profile_photo',
             'designation', 'gender', 'marital_status', 'date_of_birth',
             'qualification', 'previous_experience', 'current_company_experience',
             'employment_status', 'shift', 'work_type', 'is_pf_applicable',
@@ -197,7 +175,7 @@ class EmployeeIdentityForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for name, field in self.fields.items():
-            if not isinstance(field.widget, (forms.CheckboxInput,)):
+            if not isinstance(field.widget, (forms.CheckboxInput, forms.ClearableFileInput)):
                 field.widget.attrs.setdefault('class', 'form-control')
         # Show Aadhar pre-formatted with spaces even though it's stored raw.
         if self.instance and self.instance.pk and self.instance.aadhar_no:
@@ -212,9 +190,7 @@ class EmployeeIdentityForm(forms.ModelForm):
 
 
 class BankDetailForm(forms.ModelForm):
-    """Bank/salary account details. Editable by HR/Admin/Manager on an
-    employee's behalf (edit_employee_profile), and also self-editable by
-    the employee on their own profile (my_profile)."""
+    """Bank/salary account details — HR/Admin/Manager editable only."""
     account_number = forms.CharField(max_length=18, required=False, validators=[bank_account_validator], widget=forms.TextInput(attrs=BANK_ATTRS))
     ifsc_code = forms.CharField(max_length=11, required=False, validators=[ifsc_validator], widget=forms.TextInput(attrs=IFSC_ATTRS))
     account_holder_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
@@ -251,10 +227,7 @@ class HRDocumentForm(forms.ModelForm):
 
 
 class SelfDocumentForm(forms.ModelForm):
-    """Everyone uploads their own personal documents here. Re-uploading a
-    document type (e.g. a new Aadhar scan) is done by deleting the old one
-    first (see delete_own_document) and uploading again — this keeps only
-    one current file per type without silently overwriting history."""
+    """Everyone uploads their own personal documents here."""
     doc_type = forms.ChoiceField(
         choices=[c for c in EmployeeDocument.DOC_TYPES if c[0] in EmployeeDocument.SELF_DOC_TYPES],
         label="Document Type",

@@ -115,6 +115,45 @@ def leave_approvals(request):
             requests_qs = requests_qs.filter(user__branch=active_branch)
         context['requests'] = requests_qs
         context['manager_approved_notices'] = None
+    today = timezone.localdate()
+    # Only show requests whose leave/permission date hasn't passed yet.
+    active_leave = (
+        Q(request_type='LEAVE', end_date__gte=today) |
+        Q(request_type='PERMISSION', permission_date__gte=today)
+    )
+    context = {'manager_approved_notices': None, 'hr_rejected_pending': None}
+
+    if user.role == 'HR':
+        context['requests'] = LeaveRequest.objects.filter(status='PENDING_HR').filter(active_leave).exclude(user=user).filter(
+            Q(target_hr__isnull=True) | Q(target_hr=user)
+        ).select_related('user', 'user__profile', 'user__department', 'reviewed_by_manager')
+
+        today = timezone.localdate()
+        now_time = timezone.localtime().time()
+
+        candidates = LeaveRequest.objects.filter(
+            status='APPROVED'
+        ).exclude(user=user).select_related('user', 'reviewed_by_manager').order_by('-hr_reviewed_at')[:50]
+
+        still_active = []
+        for r in candidates:
+            if r.request_type == 'PERMISSION':
+                if not r.permission_date or r.permission_date < today:
+                    continue
+                if r.permission_date == today and r.to_time and now_time > r.to_time:
+                    continue
+            else:  # LEAVE
+                if not r.end_date or r.end_date < today:
+                    continue
+            still_active.append(r)
+            if len(still_active) >= 20:
+                break
+        context['manager_approved_notices'] = still_active
+
+    elif user.role == 'ADMIN':
+        context['requests'] = LeaveRequest.objects.filter(active_leave).select_related(
+            'user', 'user__profile', 'user__department', 'reviewed_by_manager', 'reviewed_by_hr', 'target_hr'
+        )
 
     elif user.is_manager():
         team = _team_managed_by(user)
@@ -122,13 +161,17 @@ def leave_approvals(request):
             user__in=team, status='PENDING_MANAGER'
         ).select_related('user', 'user__profile', 'user__department')
         context['manager_approved_notices'] = None
+        ).filter(active_leave).select_related('user', 'user__profile', 'user__department')
+
+        context['hr_rejected_pending'] = LeaveRequest.objects.filter(
+            reviewed_by_manager=user, status='HR_REJECTED_PENDING_MANAGER'
+        ).filter(active_leave).select_related('user', 'user__profile', 'user__department')
 
     else:
         messages.error(request, "You do not have permission to view this page.")
         return redirect('core:dashboard')
 
     return render(request, 'leaves/approvals.html', context)
-
 @login_required
 def review_leave(request, leave_id, decision):
     user = request.user

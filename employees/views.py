@@ -38,7 +38,17 @@ def _present_user_ids_today():
 
 
 def _can_apply_resignation(user):
-    return user.role in ('EMPLOYEE', 'MANAGER', 'ADMIN')
+    # HR can resign too — but their resignation is reviewed by Admin, not
+    # by another HR colleague. Admin itself never applies for resignation.
+    return user.role in ('EMPLOYEE', 'MANAGER', 'HR')
+
+
+def _can_review_resignation(acting_user, resignation):
+    """HR reviews resignations from Employees/Managers. Admin reviews
+    resignations from HR — an HR resignation never goes to another HR."""
+    if resignation.user.role == 'HR':
+        return acting_user.role == 'ADMIN'
+    return acting_user.role == 'HR'
 
 
 def _can_edit_identity(acting_user, emp_user):
@@ -69,31 +79,41 @@ def _department_sort_key(dept_name):
 def my_profile(request):
     profile, _ = EmployeeProfile.objects.get_or_create(user=request.user)
     bank_detail, _ = BankDetail.objects.get_or_create(user=request.user)
-    if request.method == 'POST':
-        form = EmployeeSelfEditForm(request.POST, request.FILES, instance=profile, user_instance=request.user)
-        bank_form = BankDetailForm(request.POST, instance=bank_detail)
-        if form.is_valid() and bank_form.is_valid():
-            form.save()
-            bank_form.save()
-            messages.success(request, 'Your profile has been updated.')
-            return redirect('employees:my_profile')
-        else:
-            messages.error(request, 'Please fix the highlighted fields below.')
-    else:
-        form = EmployeeSelfEditForm(instance=profile, user_instance=request.user)
-        bank_form = BankDetailForm(instance=bank_detail)
-
     documents = request.user.documents.all()
-    doc_form = SelfDocumentForm()
     pending_resignation = ResignationRequest.objects.filter(
         user=request.user, status__in=['PENDING', 'NEGOTIATING']
     ).order_by('-submitted_at').first()
 
     return render(request, 'employees/my_profile.html', {
-        'form': form, 'bank_form': bank_form, 'documents': documents, 'doc_form': doc_form, 'profile': profile,
-        'bank_detail': bank_detail,
+        'profile': profile, 'bank_detail': bank_detail, 'documents': documents,
         'can_apply_resignation': _can_apply_resignation(request.user),
         'pending_resignation': pending_resignation,
+    })
+
+
+@login_required
+def edit_my_profile(request):
+    """Employee's own edit page — separate from the read-only my_profile
+    view. Photo, the handful of self-editable fields, and document
+    upload/delete all live here."""
+    profile, _ = EmployeeProfile.objects.get_or_create(user=request.user)
+
+    if request.method == 'POST':
+        form = EmployeeSelfEditForm(request.POST, request.FILES, instance=profile, user_instance=request.user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Your profile has been updated.')
+            return redirect('employees:edit_my_profile')
+        else:
+            messages.error(request, 'Please fix the highlighted fields below.')
+    else:
+        form = EmployeeSelfEditForm(instance=profile, user_instance=request.user)
+
+    documents = request.user.documents.all()
+    doc_form = SelfDocumentForm()
+
+    return render(request, 'employees/edit_my_profile.html', {
+        'form': form, 'profile': profile, 'documents': documents, 'doc_form': doc_form,
     })
 
 
@@ -114,27 +134,14 @@ def upload_own_document(request):
 
 @login_required
 def delete_own_document(request, doc_id):
-    """Lets an employee remove one of their own uploaded documents — e.g.
-    to replace an outdated Aadhar scan with a fresh upload."""
+    """An employee can remove a document they uploaded to their own
+    profile. Scoped to request.user so nobody can delete someone else's
+    document by guessing an id."""
     doc = get_object_or_404(EmployeeDocument, id=doc_id, user=request.user)
     if request.method == 'POST':
-        doc.file.delete(save=False)
-        doc.delete()
-        messages.success(request, 'Document deleted. You can upload a new one below.')
-    return redirect('employees:my_profile')
-
-
-@hr_only_required
-def delete_document(request, user_id, doc_id):
-    """HR-side equivalent of delete_own_document, for official documents
-    HR uploaded on an employee's behalf."""
-    emp_user = get_object_or_404(User, id=user_id)
-    doc = get_object_or_404(EmployeeDocument, id=doc_id, user=emp_user)
-    if request.method == 'POST':
-        doc.file.delete(save=False)
         doc.delete()
         messages.success(request, 'Document deleted.')
-    return redirect('employees:edit_employee_profile', user_id=emp_user.id)
+    return redirect('employees:my_profile')
 
 
 @login_required
@@ -167,7 +174,7 @@ def resignation_list(request):
     return render(request, 'employees/resignation_list.html', {'resignations': resignations})
 
 
-@hr_only_required
+@login_required
 def approve_resignation(request, resignation_id):
     resignation = get_object_or_404(ResignationRequest, id=resignation_id)
     if resignation.status != 'PENDING':
@@ -197,7 +204,7 @@ def approve_resignation(request, resignation_id):
     return redirect('employees:resignation_list')
 
 
-@hr_only_required
+@login_required
 def reject_resignation(request, resignation_id):
     resignation = get_object_or_404(ResignationRequest, id=resignation_id)
     if resignation.status != 'PENDING':
@@ -210,7 +217,7 @@ def reject_resignation(request, resignation_id):
     return redirect('employees:resignation_list')
 
 
-@hr_only_required
+@login_required
 def negotiate_resignation(request, resignation_id):
     resignation = get_object_or_404(ResignationRequest, id=resignation_id)
     if resignation.status != 'PENDING':
@@ -306,9 +313,13 @@ def employee_directory(request):
 
     employees = User.objects.exclude(id=request.user.id).select_related('department', 'profile')
 
+    # FIX: active_branch must always be computed, not just inside the
+    # `if request.user.role == 'HR':` branch — otherwise Admin (or any
+    # other role reaching this view) hits UnboundLocalError below.
+    active_branch = get_active_branch(request)
+
     if request.user.role == 'HR':
         employees = employees.exclude(role__in=['HR', 'ADMIN'])
-        active_branch = get_active_branch(request)
     if active_branch:
         employees = employees.filter(branch=active_branch)
 
@@ -393,12 +404,10 @@ def employee_detail(request, user_id):
     doc_form = HRDocumentForm()
     role_form = RoleChangeForm(instance=emp_user, acting_user=request.user)
     latest_resignation = ResignationRequest.objects.filter(user=emp_user).first()
+    can_review_resignation = _can_review_resignation(request.user, latest_resignation) if latest_resignation else False  # NEW
 
     salary_structure = SalaryStructure.objects.filter(user=emp_user).first()
 
-    # Increment info shown directly in the Salary Details card. Queried
-    # fresh on every load, so it reflects the latest state the moment HR
-    # approves a new increment — no extra sync step needed.
     increments_qs = IncrementRequest.objects.filter(user=emp_user, status='APPROVED').order_by('-effective_date')
     increment_count = increments_qs.count()
     latest_increment = increments_qs.first()
@@ -410,19 +419,30 @@ def employee_detail(request, user_id):
         'emp_user': emp_user, 'profile': profile, 'bank_detail': bank_detail,
         'documents': documents, 'doc_form': doc_form,
         'role_form': role_form, 'latest_resignation': latest_resignation,
+        'can_review_resignation': can_review_resignation,  # NEW
         'salary_structure': salary_structure,
         'increment_count': increment_count, 'latest_increment': latest_increment,
         'edit_mode': edit_mode, 'can_edit_identity': can_edit_identity,
     })
 
 
-@hr_only_required
+@login_required
 def update_employee_status(request, user_id):
-    """HR moves an employee between Onboarding, Active, and Exited directly
-    from the Edit page. Moving EXITED -> ACTIVE (a rejoin) automatically
-    preserves their prior joining date in old_joining_date so it isn't
-    lost once date_joined_company is updated for the new stint."""
+    """HR moves any employee between Onboarding, Active, and Exited.
+    Admin can only do this for HR accounts specifically. Moving
+    EXITED -> ACTIVE (a rejoin) automatically preserves their prior
+    joining date in old_joining_date so it isn't lost once
+    date_joined_company is updated for the new stint."""
     emp_user = get_object_or_404(User, id=user_id)
+
+    is_authorized = (
+        request.user.role == 'HR' or
+        (request.user.role == 'ADMIN' and emp_user.role == 'HR')
+    )
+    if not is_authorized:
+        messages.error(request, "You do not have permission to perform this action.")
+        return redirect('employees:edit_employee_profile', user_id=emp_user.id)
+
     profile, _ = EmployeeProfile.objects.get_or_create(user=emp_user)
 
     if request.method == 'POST':
@@ -436,7 +456,6 @@ def update_employee_status(request, user_id):
         else:
             messages.error(request, "Invalid status selected.")
     return redirect('employees:edit_employee_profile', user_id=emp_user.id)
-
 @hr_only_required
 def upload_document(request, user_id):
     emp_user = get_object_or_404(User, id=user_id)
@@ -448,6 +467,18 @@ def upload_document(request, user_id):
             doc.uploaded_by = request.user
             doc.save()
             messages.success(request, 'Document uploaded.')
+    return redirect('employees:edit_employee_profile', user_id=emp_user.id)
+
+
+@hr_only_required
+def delete_document(request, user_id, doc_id):
+    """HR removes a document from an employee's profile (official letters
+    HR uploaded, or personal documents the employee uploaded themselves)."""
+    emp_user = get_object_or_404(User, id=user_id)
+    doc = get_object_or_404(EmployeeDocument, id=doc_id, user=emp_user)
+    if request.method == 'POST':
+        doc.delete()
+        messages.success(request, 'Document deleted.')
     return redirect('employees:edit_employee_profile', user_id=emp_user.id)
 
 
@@ -470,7 +501,7 @@ def edit_employee_profile(request, user_id):
 
     if request.method == 'POST':
         form = HREmployeeEditForm(request.POST, instance=emp_user)
-        identity_form = EmployeeIdentityForm(request.POST, instance=profile)
+        identity_form = EmployeeIdentityForm(request.POST, request.FILES, instance=profile)
         bank_form = BankDetailForm(request.POST, instance=bank_detail)
 
         # Enrollment ID / Employee ID: the UI only lets HR edit the numeric
