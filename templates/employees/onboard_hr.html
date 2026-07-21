@@ -1,0 +1,31 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header"><h1>Onboard Hr</h1></div>
+<div class="card">
+  {% if form.errors %}
+  <ul class="messages"><li class="error">Please fix the highlighted fields below.</li></ul>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>Username</label>{{ form.username }}{% if form.username.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.username.errors.0 }}</p>{% endif %}</div>
+      <div><label>First Name</label>{{ form.first_name }}{% if form.first_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.first_name.errors.0 }}</p>{% endif %}</div>
+      <div><label>Last Name</label>{{ form.last_name }}{% if form.last_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.last_name.errors.0 }}</p>{% endif %}</div>
+      <div><label>Email</label>{{ form.email }}{% if form.email.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.email.errors.0 }}</p>{% endif %}</div>
+      <div><label>Phone</label>
+  <div style="display:flex; gap:8px; margin-bottom:14px;">
+    {{ form.phone_country_code }}
+    {{ form.phone }}
+  </div>
+  {% if form.phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.phone.errors.0 }}</p>{% endif %}
+</div>
+      <div><label>Role</label>{{ form.role }}</div>
+      <div><label>Department</label>{{ form.department }}</div>
+      <div><label>Branch</label>{{ form.branch }}{% if locked_branch %}<p style="color:var(--grey-500); font-size:0.8rem; margin:-10px 0 10px;">New hires join your own branch automatically.</p>{% endif %}</div>
+      <div><label>Joining Date</label>{{ form.date_joined_company }}</div>
+      <div><label>Temporary Password</label>{{ form.password }}{% if form.password.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.password.errors.0 }}</p>{% endif %}</div>
+    </div>
+    <button type="submit" class="btn btn-primary">Create Employee</button>
+  </form>
+</div>
+{% endblock %}

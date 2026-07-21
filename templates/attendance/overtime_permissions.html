@@ -2,6 +2,7 @@
 {% block content %}
 <div class="page-header"><h1>Overtime & Sunday Work Permissions</h1></div>
 
+{% if not is_admin %}
 <div class="card">
   <h3>Grant Permission</h3>
   {% if not projects %}
@@ -86,9 +87,10 @@
   </script>
   {% endif %}
 </div>
+{% endif %}
 
 <div class="card">
-  <h3>Recent Permissions</h3>
+  <h3>{% if is_admin %}Overtime / Sunday Work Records{% else %}Recent Permissions{% endif %}</h3>
   <table>
     <tr><th>Employee</th><th>Project</th><th>Project Manager</th><th>Date</th><th>Type</th><th>Granted By</th><th></th></tr>
     {% for perm in permissions %}
@@ -100,13 +102,17 @@
       <td>{{ perm.get_permission_type_display }}</td>
       <td>{{ perm.authorized_by|default:"-" }}</td>
       <td>
+        {% if is_admin %}
+        <span class="badge badge-info">View only</span>
+        {% else %}
         <form method="post" action="{% url 'attendance:revoke_overtime_permission' perm.id %}" style="margin:0;">
           {% csrf_token %}
           <button type="submit" class="btn btn-outline btn-sm">Revoke</button>
         </form>
+        {% endif %}
       </td>
     </tr>
-    {% empty %}<tr><td colspan="7" class="empty-state">No permissions granted yet.</td></tr>{% endfor %}
+    {% empty %}<tr><td colspan="7" class="empty-state">No permissions {% if is_admin %}recorded{% else %}granted{% endif %} yet.</td></tr>{% endfor %}
   </table>
 </div>
 {% endblock %}

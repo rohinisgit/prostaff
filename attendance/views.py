@@ -342,11 +342,16 @@ def download_team_monthly_attendance(request, year, month):
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
-def _overtime_manageable_projects(user):
-    """HR sees every project. A Manager only sees projects they created
-    (manager) or lead."""
+def _overtime_manageable_projects(user, branch=None):
+    """HR and Admin can see across every project (Admin is enforced as
+    read-only inside the view below, never here). A Manager only sees
+    projects they created or lead. Optionally scoped to a branch — a
+    project "belongs" to a branch through its manager or its assigned
+    employees."""
     qs = Project.objects.filter(status__in=['APPROVED', 'COMPLETED'])
-    if user.role == 'HR':
+    if user.role in ('HR', 'ADMIN'):
+        if branch:
+            qs = qs.filter(Q(manager__branch=branch) | Q(assignments__user__branch=branch)).distinct()
         return qs
     if user.is_manager():
         return qs.filter(Q(manager=user) | Q(lead=user)).distinct()
@@ -355,13 +360,19 @@ def _overtime_manageable_projects(user):
 
 @login_required
 def overtime_permissions(request):
-    if not (request.user.role == 'HR' or request.user.is_manager()):
+    is_admin = request.user.role == 'ADMIN'
+    if not (request.user.role == 'HR' or request.user.is_manager() or is_admin):
         messages.error(request, "You do not have permission to view this page.")
         return redirect('core:dashboard')
 
-    projects = _overtime_manageable_projects(request.user)
+    active_branch = get_active_branch(request)
+    projects = _overtime_manageable_projects(request.user, branch=active_branch)
 
     if request.method == 'POST':
+        if is_admin:
+            messages.error(request, "Admin has view-only access and cannot grant overtime permissions.")
+            return redirect('attendance:overtime_permissions')
+
         project = projects.filter(id=request.POST.get('project')).first()
         employee_id = request.POST.get('employee')
         perm_date = request.POST.get('date')
@@ -408,11 +419,15 @@ def overtime_permissions(request):
 
     permissions = OvertimePermission.objects.filter(project__in=projects).select_related(
         'employee', 'project', 'project__manager', 'authorized_by'
-    )[:150]
+    )
+    if active_branch:
+        permissions = permissions.filter(employee__branch=active_branch)
+    permissions = permissions[:150]
 
     return render(request, 'attendance/overtime_permissions.html', {
         'projects': projects, 'projects_data': projects_data,
         'permissions': permissions, 'today': timezone.localdate(),
+        'is_admin': is_admin,
     })
 
 

@@ -23,12 +23,19 @@ class IncrementRequestForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         acting_user = kwargs.pop('acting_user', None)
+        branch = kwargs.pop('branch', None)
         super().__init__(*args, **kwargs)
         qs = User.objects.all()
         if acting_user:
             qs = qs.exclude(id=acting_user.id)
+        if branch:
+            qs = qs.filter(branch=branch)
         self.fields['user'].queryset = qs
-        self.fields['feedback_manager'].queryset = User.objects.filter(role='MANAGER')
+
+        manager_qs = User.objects.filter(role='MANAGER')
+        if branch:
+            manager_qs = manager_qs.filter(branch=branch)
+        self.fields['feedback_manager'].queryset = manager_qs
         for field in self.fields.values():
             field.widget.attrs.setdefault('class', 'form-control')
 
