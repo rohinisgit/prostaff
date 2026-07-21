@@ -702,6 +702,17 @@ table th:last-child, table td:last-child {
   box-shadow: var(--shadow);
   flex-shrink: 0;
 }
+.leave-approval-table { width:100%; border-collapse:collapse; }
+.leave-approval-table th, .leave-approval-table td { padding:12px 14px; white-space:nowrap; }
+.leave-approval-table td:nth-child(6), .leave-approval-table td:nth-child(7) { white-space:normal; }
+.icon-btn {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:30px; height:30px; border-radius:8px; margin-left:4px;
+}
+.icon-btn-approve { background:#E5F7EC; color:#1D9A55; }
+.icon-btn-approve:hover { background:#1D9A55; color:#fff; }
+.icon-btn-reject { background:#FDEAE8; color:#E4483A; }
+.icon-btn-reject:hover { background:#E4483A; color:#fff; }
 
 /* ---------- Document list rows (with delete/replace) ---------- */
 .doc-row {

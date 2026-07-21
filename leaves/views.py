@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
 from django.db.models import Q
+from core.utils import get_active_branch
 
 from core.models import User
 from leaves.models import LeaveRequest, LeaveBalance, LeaveNotification
@@ -86,13 +87,34 @@ def my_leaves(request):
 def _team_managed_by(manager):
     return User.objects.filter(
         Q(department__manager=manager) |
-        Q(manager=manager, department__manager__isnull=True)
+        Q(manager=manager, department__manager__isnull=True),
+        branch=manager.branch,
     ).exclude(id=manager.id).distinct()
-
 
 @login_required
 def leave_approvals(request):
     user = request.user
+    context = {}
+
+    if user.role == 'HR':
+        active_branch = get_active_branch(request)
+        requests_qs = LeaveRequest.objects.filter(status='PENDING_HR').exclude(user=user).select_related('user', 'user__profile', 'user__department')
+        notices_qs = LeaveRequest.objects.filter(
+            status='APPROVED', reviewed_by_manager__isnull=False
+        ).exclude(user__role='MANAGER').select_related('user', 'reviewed_by_manager').order_by('-manager_reviewed_at')[:20]
+        if active_branch:
+            requests_qs = requests_qs.filter(user__branch=active_branch)
+            notices_qs = notices_qs.filter(user__branch=active_branch)
+        context['requests'] = requests_qs
+        context['manager_approved_notices'] = notices_qs
+
+    elif user.role == 'ADMIN':
+        active_branch = get_active_branch(request)
+        requests_qs = LeaveRequest.objects.select_related('user', 'user__profile', 'user__department').all()
+        if active_branch:
+            requests_qs = requests_qs.filter(user__branch=active_branch)
+        context['requests'] = requests_qs
+        context['manager_approved_notices'] = None
     today = timezone.localdate()
     # Only show requests whose leave/permission date hasn't passed yet.
     active_leave = (
@@ -137,6 +159,8 @@ def leave_approvals(request):
         team = _team_managed_by(user)
         context['requests'] = LeaveRequest.objects.filter(
             user__in=team, status='PENDING_MANAGER'
+        ).select_related('user', 'user__profile', 'user__department')
+        context['manager_approved_notices'] = None
         ).filter(active_leave).select_related('user', 'user__profile', 'user__department')
 
         context['hr_rejected_pending'] = LeaveRequest.objects.filter(

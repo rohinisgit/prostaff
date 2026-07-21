@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.db.models import Q
 from django.utils import timezone
 from increments.models import IncrementRequest
+from core.decorators import admin_only_required
 
 from core.decorators import hr_or_admin_required, hr_only_required, hr_admin_or_manager_required
 from core.models import User
@@ -616,14 +617,17 @@ def my_department(request):
     if not request.user.is_manager():
         messages.error(request, "Only managers can view this page.")
         return redirect('core:dashboard')
-    # Includes Exited staff so a Manager can see who left their department —
-    # they're clearly badged in the template.
-    staff = list(User.objects.filter(department=request.user.department).exclude(id=request.user.id).select_related('profile'))
+
+    staff = list(
+        User.objects.filter(
+            department=request.user.department,
+            branch=request.user.branch,
+        ).exclude(id=request.user.id).select_related('profile')
+    )
     present_user_ids = _present_user_ids_today()
     for s in staff:
         s.is_present_today = s.id in present_user_ids
     return render(request, 'employees/my_department.html', {'staff': staff, 'department': request.user.department})
-
 
 @login_required
 def team_member_detail(request, user_id):
@@ -631,7 +635,7 @@ def team_member_detail(request, user_id):
         messages.error(request, "Only managers can view this page.")
         return redirect('core:dashboard')
 
-    emp_user = get_object_or_404(User, id=user_id, department=request.user.department)
+    emp_user = get_object_or_404(User, id=user_id, department=request.user.department, branch=request.user.branch, )
     if emp_user.id == request.user.id:
         messages.error(request, "You cannot view your own team member page.")
         return redirect('employees:my_department')
@@ -663,3 +667,20 @@ def my_resignation(request):
         'resignations': resignations,
         'pending_resignation': pending_resignation,
     })
+
+
+@admin_only_required
+def onboard_hr(request):
+    if request.method == 'POST':
+        form = NewEmployeeForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.role = User.ROLE_HR
+            user.manager = None
+            user.save()
+            EmployeeProfile.objects.create(user=user, status='ACTIVE')
+            messages.success(request, f'{user} onboarded as HR successfully.')
+            return redirect('employees:employee_detail', user_id=user.id)
+    else:
+        form = NewEmployeeForm(initial={'role': 'HR'})
+    return render(request, 'employees/onboard_hr.html', {'form': form})

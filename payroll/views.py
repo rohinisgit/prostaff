@@ -70,16 +70,12 @@ def download_payslip(request, payslip_id):
 
 @hr_or_admin_required
 def payroll_runs(request):
-    role_order = ['ADMIN', 'MANAGER', 'EMPLOYEE', 'HR']
-    role_labels = {'ADMIN': 'Admin', 'MANAGER': 'Managers', 'EMPLOYEE': 'Employees', 'HR': 'HR'}
+    role_labels = {'ADMIN': 'Admin', 'MANAGER': 'Manager', 'EMPLOYEE': 'Employee', 'HR': 'HR'}
 
     active_branch = get_active_branch(request)
 
-    # Onboarding employees haven't started yet and Exited employees are
-    # gone — payroll only ever concerns Active employees. Also scoped to
-    # whichever branch is currently active for this HR/Admin.
     all_users = User.objects.exclude(id=request.user.id).select_related('department', 'profile').exclude(
-        profile__status__in=['ONBOARDING', 'EXITED']
+        profile__status__in=['ONBOARDING', 'EXITED']   # only Active employees
     )
     if active_branch:
         all_users = all_users.filter(branch=active_branch)
@@ -94,22 +90,22 @@ def payroll_runs(request):
         key = p.payroll_run.start_date.strftime('%Y-%m')
         credited_map.setdefault(p.user_id, set()).add(key)
 
-    sections = []
-    for role in role_order:
-        role_employees = all_users.filter(role=role).order_by('first_name', 'username')
-        if not role_employees.exists():
-            continue
-        employees_list = [
-            {
-                'user': emp,
-                'credited_months': ','.join(sorted(credited_map.get(emp.id, set()))),
-            }
-            for emp in role_employees
-        ]
-        sections.append({'role': role, 'role_label': role_labels[role], 'employees': employees_list})
+    structure_user_ids = set(
+        SalaryStructure.objects.filter(user__in=all_users).values_list('user_id', flat=True)
+    )
 
-    return render(request, 'payroll/runs.html', {'sections': sections, 'months': months}) 
+    employees = [
+        {
+            'user': emp,
+            'role': emp.role,
+            'role_label': role_labels.get(emp.role, emp.role),
+            'credited_months': ','.join(sorted(credited_map.get(emp.id, set()))),
+            'has_salary_structure': emp.id in structure_user_ids,
+        }
+        for emp in all_users.order_by('role', 'first_name', 'username')
+    ]
 
+    return render(request, 'payroll/runs.html', {'employees': employees, 'months': months})
 
 @hr_or_admin_required
 def employee_payroll_history(request, user_id):

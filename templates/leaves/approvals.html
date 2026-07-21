@@ -2,6 +2,54 @@
 {% block content %}
 <div class="page-header"><h1>Permission / Leave Approvals</h1></div>
 
+<div class="card" style="padding:0; overflow-x:auto;">
+  <table class="leave-approval-table">
+    <thead>
+      <tr>
+        <th>Employee</th>
+        <th>ID</th>
+        <th>Designation</th>
+        <th>Department</th>
+        <th>Type</th>
+        <th>Details</th>
+        <th>Reason</th>
+        <th>Status</th>
+        <th style="text-align:right;">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in requests %}
+      <tr>
+        <td>{{ r.user.get_full_name|default:r.user.username }}</td>
+        <td>{{ r.user.employee_id|default:"-" }}</td>
+        <td>{{ r.user.profile.designation|default:"-" }}</td>
+        <td>{{ r.user.department|default:"-" }}</td>
+        <td>{{ r.get_leave_type_display }}</td>
+        <td>{{ r.start_date|date:"M d, Y" }} &ndash; {{ r.end_date|date:"M d, Y" }} ({{ r.num_days }} day{{ r.num_days|pluralize }})</td>
+        <td>{{ r.reason|default:"-"|truncatewords:6 }}</td>
+        <td>
+          {% if r.status == 'APPROVED' %}<span class="badge badge-success">Approved</span>
+          {% elif r.status == 'REJECTED' %}<span class="badge badge-danger">Rejected</span>
+          {% elif r.status == 'PENDING_HR' %}<span class="badge badge-warning">Pending HR</span>
+          {% else %}<span class="badge badge-warning">Pending Manager</span>{% endif %}
+        </td>
+        <td style="text-align:right; white-space:nowrap;">
+          {% if user.role == 'MANAGER' and r.status == 'PENDING_MANAGER' or user.role == 'HR' and r.status == 'PENDING_HR' %}
+          <a href="{% url 'leaves:review_leave' r.id 'approve' %}" class="icon-btn icon-btn-approve" title="Approve">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          </a>
+          <a href="{% url 'leaves:review_leave' r.id 'reject' %}" class="icon-btn icon-btn-reject" title="Reject">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </a>
+          {% elif user.role == 'ADMIN' %}
+          <span class="badge badge-info">View only</span>
+          {% else %}
+          <span style="color:var(--grey-500); font-size:0.8rem;">&mdash;</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}<tr><td colspan="9" class="empty-state">No leave requests.</td></tr>{% endfor %}
+    </tbody>
 {% if hr_rejected_pending %}
 <div class="dir-section-header" style="background:#E4483A;">
   <span class="dir-role-name">HR Declined - Needs Your Final Rejection</span>
@@ -87,18 +135,18 @@
 
 {% if manager_approved_notices is not None %}
 <div class="card">
-  <h3>Employees on Approved Leave </h3>
+  <h3>Employees on Approved Leave <span class="badge badge-info" style="font-weight:500;">Informational</span></h3>
   <table>
-    <tr><th>Employee</th><th>Type</th><th>Details</th><th>Approved On</th></tr>
+    <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Approved By</th><th>Approved On</th></tr>
     {% for r in manager_approved_notices %}
     <tr>
       <td>{{ r.user.get_full_name|default:r.user.username }}</td>
-      <td>{{ r.get_request_type_display }}</td>
-      <td>{% if r.request_type == 'PERMISSION' %}{{ r.permission_date }}{% else %}{{ r.start_date }} - {{ r.end_date }}{% endif %}</td>
-      <td>{{ r.hr_reviewed_at|date:"d M Y, h:i A" }}</td>
+      <td>{{ r.get_leave_type_display }}</td>
+      <td>{{ r.start_date }} - {{ r.end_date }}</td>
+      <td>{{ r.reviewed_by_manager }}</td>
+      <td>{{ r.manager_reviewed_at|date:"d M Y, h:i A" }}</td>
     </tr>
-     {% empty %}<tr><td colspan="4" class="empty-state">No employees currently on approved leave.</td></tr>{% endfor %}
-   </table>
+    {% empty %}<tr><td colspan="5" class="empty-state">No recent manager-approved leaves.</td></tr>{% endfor %}
   </table>
 </div>
 {% endif %}
