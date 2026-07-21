@@ -93,12 +93,16 @@ def _team_managed_by(manager):
 @login_required
 def leave_approvals(request):
     user = request.user
+    today = timezone.localdate()
+    # Only show requests whose leave/permission date hasn't passed yet.
+    active_leave = (
+        Q(request_type='LEAVE', end_date__gte=today) |
+        Q(request_type='PERMISSION', permission_date__gte=today)
+    )
     context = {'manager_approved_notices': None, 'hr_rejected_pending': None}
 
     if user.role == 'HR':
-        # Actionable: pending-HR requests routed generally (target_hr is
-        # null) or specifically to this HR user, excluding their own.
-        context['requests'] = LeaveRequest.objects.filter(status='PENDING_HR').exclude(user=user).filter(
+        context['requests'] = LeaveRequest.objects.filter(status='PENDING_HR').filter(active_leave).exclude(user=user).filter(
             Q(target_hr__isnull=True) | Q(target_hr=user)
         ).select_related('user', 'user__profile', 'user__department', 'reviewed_by_manager')
 
@@ -125,27 +129,25 @@ def leave_approvals(request):
         context['manager_approved_notices'] = still_active
 
     elif user.role == 'ADMIN':
-        context['requests'] = LeaveRequest.objects.select_related(
+        context['requests'] = LeaveRequest.objects.filter(active_leave).select_related(
             'user', 'user__profile', 'user__department', 'reviewed_by_manager', 'reviewed_by_hr', 'target_hr'
-        ).all()
+        )
 
     elif user.is_manager():
         team = _team_managed_by(user)
         context['requests'] = LeaveRequest.objects.filter(
             user__in=team, status='PENDING_MANAGER'
-        ).select_related('user', 'user__profile', 'user__department')
+        ).filter(active_leave).select_related('user', 'user__profile', 'user__department')
 
         context['hr_rejected_pending'] = LeaveRequest.objects.filter(
             reviewed_by_manager=user, status='HR_REJECTED_PENDING_MANAGER'
-        ).select_related('user', 'user__profile', 'user__department')
+        ).filter(active_leave).select_related('user', 'user__profile', 'user__department')
 
     else:
         messages.error(request, "You do not have permission to view this page.")
         return redirect('core:dashboard')
 
     return render(request, 'leaves/approvals.html', context)
-
-
 @login_required
 def review_leave(request, leave_id, decision):
     user = request.user

@@ -1,0 +1,78 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="page-header">
+  <h1>Edit My Profile</h1>
+  <a href="{% url 'employees:my_profile' %}" class="btn btn-outline btn-sm">&larr; Back to My Profile</a>
+</div>
+
+{% if form.errors %}
+<ul class="messages"><li class="error">Please fix the highlighted fields below.</li></ul>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+
+  <div class="card">
+    <h3>Profile Photo</h3>
+    <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+      {% if profile.profile_photo %}
+      <img src="{{ profile.profile_photo.url }}" alt="" style="width:110px; height:110px; border-radius:14px; object-fit:cover; border:1px solid var(--grey-100); flex-shrink:0;">
+      {% else %}
+      <div style="width:110px; height:110px; border-radius:14px; background:var(--grey-100); display:flex; align-items:center; justify-content:center; color:var(--grey-500); font-size:0.8rem; text-align:center; flex-shrink:0;">No Photo</div>
+      {% endif %}
+      <div style="flex:1; min-width:220px;">
+        <label>Upload / Change Photo</label>
+        {{ form.profile_photo }}
+        <p style="color:var(--grey-500); font-size:0.78rem; margin:6px 0 0;">JPG or PNG recommended. Square images look best.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Editable Details</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>First Name</label>{{ form.first_name }}{% if form.first_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.first_name.errors.0 }}</p>{% endif %}</div>
+      <div><label>Last Name</label>{{ form.last_name }}{% if form.last_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.last_name.errors.0 }}</p>{% endif %}</div>
+      <div><label>Phone</label>
+        <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.phone_country_code }}{{ form.phone }}</div>
+        {% if form.phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.phone.errors.0 }}</p>{% endif %}
+      </div>
+    </div>
+    <label>Address</label>
+    {{ form.address }}
+    <p style="color:var(--grey-500); font-size:0.8rem; margin-top:-8px;">
+      Everything else (Aadhar, PAN, bank details, emergency contact, employment fields) is managed by HR / your Manager — ask them to update these for you.
+    </p>
+    <button type="submit" class="btn btn-primary" style="margin-top:6px;">Save Changes</button>
+  </div>
+</form>
+
+<div class="card">
+  <h3>My Documents</h3>
+  <table>
+    <tr><th>Type</th><th>Uploaded</th><th></th></tr>
+    {% for doc in documents %}
+    <tr>
+      <td>{{ doc.get_doc_type_display }}</td>
+      <td>{{ doc.uploaded_at|date:"d M Y" }}</td>
+      <td>
+        <a href="{{ doc.file.url }}" class="btn btn-outline btn-sm">View</a>
+        <form method="post" action="{% url 'employees:delete_own_document' doc.id %}" style="display:inline;" onsubmit="return confirm('Delete this document?');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger btn-sm" style ="margin-top:5px;">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% empty %}<tr><td colspan="3" class="empty-state">No documents uploaded yet.</td></tr>{% endfor %}
+  </table>
+  <form method="post" action="{% url 'employees:upload_own_document' %}" enctype="multipart/form-data" style="margin-top:14px; display:flex; gap:10px; align-items:end;">
+    {% csrf_token %}
+    <div style="flex:1;"><label>Document Type</label>{{ doc_form.doc_type }}</div>
+    <div style="flex:1;"><label>File</label>{{ doc_form.file }}</div>
+    <button type="submit" class="btn btn-accent" style="margin-bottom:14px;">Upload</button>
+  </form>
+  <p style="color:var(--grey-500); font-size:0.8rem; margin:6px 0 0;">
+    Upload your own personal documents here (degree certificate, PAN, Aadhar, ID proof, etc.)
+  </p>
+</div>
+{% endblock %}

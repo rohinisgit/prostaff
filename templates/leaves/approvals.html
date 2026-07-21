@@ -64,6 +64,7 @@
         {% if r.reviewed_by_hr %}<br><span style="font-size:0.72rem; color:var(--grey-500);">HR: {{ r.reviewed_by_hr }}</span>{% endif %}
         {% if r.target_hr %}<br><span style="font-size:0.72rem; color:var(--grey-500);">Routed to: {{ r.target_hr }}</span>{% endif %}
       </td>
+      <td>
       {% if user.role == 'MANAGER' and r.status == 'PENDING_MANAGER' or user.role == 'HR' and r.status == 'PENDING_HR' %}
        <div class="approval-actions">
          <a href="{% url 'leaves:review_leave' r.id 'approve' %}" class="btn-action btn-action-approve" title="Approve">

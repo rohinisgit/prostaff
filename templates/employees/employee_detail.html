@@ -10,24 +10,26 @@
     <a href="{% url 'employees:delete_employee' emp_user.id %}" class="btn btn-danger btn-sm">Delete</a>
     {% endif %}
     {% if can_edit_identity %}
-    <a href="{% url 'employees:edit_employee_profile' emp_user.id %}" class="btn btn-accent btn-sm">Edit</a>
+    <a href="{% url 'employees:edit_employee_profile' emp_user.id %}" class="btn btn-accent btn-sm">Edit Profile</a>
     {% endif %}
   </div>
 </div>
 
-<div style="display:flex; align-items:center; gap:16px; margin-bottom:6px;">
+<!-- Profile header: large photo + name + IDs + status -->
+<div class="card" style="display:flex; gap:24px; align-items:center; flex-wrap:wrap;">
   {% if profile.profile_photo %}
-  <img src="{{ profile.profile_photo.url }}" alt="" class="profile-avatar-sm">
+  <img src="{{ profile.profile_photo.url }}" alt="" style="width:140px; height:140px; border-radius:14px; object-fit:cover; border:1px solid var(--grey-100); flex-shrink:0;">
   {% else %}
-  <div class="profile-avatar-sm-placeholder">{{ emp_user.get_full_name|default:emp_user.username|first|upper }}</div>
+  <div style="width:140px; height:140px; border-radius:14px; background:var(--grey-100); display:flex; align-items:center; justify-content:center; color:var(--grey-500); font-size:0.85rem; flex-shrink:0;">No Photo</div>
   {% endif %}
-  <div>
-    <h1 style="margin:0 0 4px; display:flex; align-items:center; gap:12px;">
+  <div style="flex:1; min-width:220px;">
+    <h1 style="margin:0 0 6px;">
       {{ emp_user.get_full_name|default:emp_user.username }}
       {% if profile.status == 'EXITED' %}<span class="badge badge-danger">Exited</span>
       {% elif profile.status == 'ONBOARDING' %}<span class="badge badge-warning">Onboarding</span>
       {% else %}<span class="badge badge-active">Active</span>{% endif %}
     </h1>
+    <p style="margin:0 0 4px; color:var(--grey-700);">{{ profile.designation|default:emp_user.get_role_display }} &middot; {{ emp_user.department|default:"No Department" }}</p>
     <p style="margin:0; color:var(--grey-500); font-size:0.85rem;">
       Enrollment ID: <strong>{{ profile.enrollment_id|default:"-" }}</strong> &middot;
       Employee ID: <strong>{{ emp_user.employee_id|default:"-" }}</strong>
@@ -38,10 +40,10 @@
 {% if profile.status == 'EXITED' %}
 <div class="card" style="border-left:4px solid #E4483A;">
   <h3 style="margin-top:0;">Exit Details</h3>
-  <div class="info-grid" style="grid-template-columns:1fr 1fr 1fr;">
-    <div><label class="field-label">Resign / Exit Date</label><p class="field-value">{{ profile.exit_date|default:"-" }}</p></div>
-    <div><label class="field-label">Reason</label><p class="field-value">{{ profile.exit_reason|default:"-" }}</p></div>
-    <div><label class="field-label">Joining Date (this stint)</label><p class="field-value">{{ emp_user.date_joined_company|default:"-" }}</p></div>
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px 24px;">
+    <div><label style="font-weight:700; font-size:0.85rem; color:var(--grey-700);">Resign / Exit Date</label><p style="margin:0;">{{ profile.exit_date|default:"-" }}</p></div>
+    <div><label style="font-weight:700; font-size:0.85rem; color:var(--grey-700);">Reason</label><p style="margin:0;">{{ profile.exit_reason|default:"-" }}</p></div>
+    <div><label style="font-weight:700; font-size:0.85rem; color:var(--grey-700);">Joining Date (this stint)</label><p style="margin:0;">{{ emp_user.date_joined_company|default:"-" }}</p></div>
   </div>
 </div>
 {% endif %}
@@ -49,110 +51,82 @@
 {% if profile.old_joining_date %}
 <div class="card" style="border-left:4px solid var(--electric-blue);">
   <h3 style="margin-top:0;">Rejoined Employee</h3>
-  <div class="info-grid" style="grid-template-columns:1fr 1fr;">
-    <div><label class="field-label">Original Joining Date</label><p class="field-value">{{ profile.old_joining_date }}</p></div>
-    <div><label class="field-label">Current Joining Date</label><p class="field-value">{{ emp_user.date_joined_company|default:"-" }}</p></div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px 24px;">
+    <div><label style="font-weight:700; font-size:0.85rem; color:var(--grey-700);">Original Joining Date</label><p style="margin:0;">{{ profile.old_joining_date }}</p></div>
+    <div><label style="font-weight:700; font-size:0.85rem; color:var(--grey-700);">Current Joining Date</label><p style="margin:0;">{{ emp_user.date_joined_company|default:"-" }}</p></div>
   </div>
 </div>
 {% endif %}
 
+<!-- Everything else, in one straightforward, ordered, read-only list -->
 <div class="card">
-  <h3>Basic Details</h3>
-  <div class="info-grid" style="grid-template-columns:1fr 1fr 1fr;">
-    <div><label class="field-label">Enrollment ID</label><p class="field-value">{{ profile.enrollment_id|default:"-" }}</p></div>
-    <div><label class="field-label">Employee ID</label><p class="field-value">{{ emp_user.employee_id|default:"-" }}</p></div>
-    <div><label class="field-label">Role / Designation</label><p class="field-value">{{ profile.designation|default:emp_user.get_role_display }}</p></div>
-    <div><label class="field-label">Department</label><p class="field-value">{{ emp_user.department|default:"-" }}</p></div>
-    <div><label class="field-label">Branch</label><p class="field-value">{{ emp_user.branch|default:"-" }}</p></div>
-    <div><label class="field-label">Gender</label><p class="field-value">{{ profile.get_gender_display|default:"-" }}</p></div>
-    <div><label class="field-label">Marital Status</label><p class="field-value">{{ profile.get_marital_status_display|default:"-" }}</p></div>
-    <div><label class="field-label">Date of Birth</label><p class="field-value">{{ profile.date_of_birth|default:"-" }}</p></div>
-    <div><label class="field-label">Blood Group</label><p class="field-value">{{ profile.blood_group|default:"-" }}</p></div>
-    <div><label class="field-label">Date of Joining</label><p class="field-value">{{ emp_user.date_joined_company|default:"-" }}</p></div>
-    <div><label class="field-label">Qualification</label><p class="field-value">{{ profile.qualification|default:"-" }}</p></div>
-    <div><label class="field-label">Previous Experience</label><p class="field-value">{{ profile.previous_experience|default:"-" }}</p></div>
-    <div><label class="field-label">Experience (Current Company)</label><p class="field-value">{{ profile.current_company_experience|default:"-" }}</p></div>
-    <div><label class="field-label">Employment Status</label><p class="field-value">{{ profile.get_employment_status_display|default:"-" }}</p></div>
-    <div><label class="field-label">Shift</label><p class="field-value">{{ profile.get_shift_display|default:"-" }}</p></div>
-    <div><label class="field-label">Work Type</label><p class="field-value">{{ profile.get_work_type_display|default:"-" }}</p></div>
-    <div><label class="field-label">PF Status</label><p class="field-value">{% if profile.is_pf_applicable %}PF{% else %}Non-PF{% endif %}</p></div>
-    <div><label class="field-label">ID Card Received</label><p class="field-value">{% if profile.id_card_received %}Yes{% else %}No{% endif %}</p></div>
-    <div><label class="field-label">Status</label>
-      <p class="field-value">
-        {% if profile.status == 'EXITED' %}<span class="badge badge-danger">Exited</span>
-        {% elif profile.status == 'ONBOARDING' %}<span class="badge badge-warning">Onboarding</span>
-        {% else %}<span class="badge badge-info">Active</span>{% endif %}
-      </p>
-    </div>
-  </div>
-</div>
-
-<div class="card">
-  <h3>Contact Details</h3>
-  <div class="info-grid" style="grid-template-columns:1fr 1fr 1fr;">
-    <div><label class="field-label">Email</label><p class="field-value">{{ emp_user.email|default:"-" }}</p></div>
-    <div><label class="field-label">Mobile</label><p class="field-value">{% if emp_user.phone %}{{ emp_user.phone_country_code }} {{ emp_user.phone }}{% else %}-{% endif %}</p></div>
-    <div><label class="field-label">Emergency Contact</label><p class="field-value">{{ profile.emergency_contact_name|default:"-" }}{% if profile.emergency_contact_phone %} &middot; {{ profile.emergency_contact_country_code }} {{ profile.emergency_contact_phone }}{% endif %}</p></div>
-    <div style="grid-column:1 / -1;"><label class="field-label">Address</label><p class="field-value">{{ profile.address|default:"-" }}</p></div>
-  </div>
-</div>
-
-<div class="card">
-  <h3>Government / Statutory IDs</h3>
-  <div class="info-grid" style="grid-template-columns:1fr 1fr 1fr;">
-    <div><label class="field-label">Aadhar Number</label><p class="field-value">{{ profile.aadhar_display }}</p></div>
-    <div><label class="field-label">PAN Number</label><p class="field-value">{{ profile.pan_no|default:"-" }}</p></div>
-    <div><label class="field-label">UAN / PF Number</label><p class="field-value">{{ profile.uan_pf_number|default:"-" }}</p></div>
-    <div><label class="field-label">ESI Number</label><p class="field-value">{{ profile.esi_number|default:"-" }}</p></div>
-  </div>
-</div>
-
-<div class="card">
-  <h3>Reference Details</h3>
-  <div class="info-grid" style="grid-template-columns:1fr 1fr;">
-    <div><label class="field-label">Referred By</label><p class="field-value">{{ profile.referred_by_name|default:"-" }}</p></div>
-    <div><label class="field-label">Referred By (Enrollment No.)</label><p class="field-value">{{ profile.referred_by_enrollment_id|default:"-" }}</p></div>
-    <div><label class="field-label">Reference 1 ({{ profile.get_reference1_type_display|default:"College Faculty / Previous Company" }})</label><p class="field-value">{{ profile.reference1_name|default:"-" }}{% if profile.reference1_contact %} &middot; {{ profile.reference1_contact }}{% endif %}</p></div>
-    <div><label class="field-label">Reference 2 (Relative)</label><p class="field-value">{{ profile.reference2_name|default:"-" }}{% if profile.reference2_relation %} ({{ profile.reference2_relation }}){% endif %}{% if profile.reference2_contact %} &middot; {{ profile.reference2_contact }}{% endif %}</p></div>
+  <h3>Profile Details</h3>
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px 24px;">
+    <div><label style="font-weight:700;">Enrollment ID</label><p style="margin:0;">{{ profile.enrollment_id|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Employee ID</label><p style="margin:0;">{{ emp_user.employee_id|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">PF Status</label><p style="margin:0;">{% if profile.is_pf_applicable %}PF{% else %}Non-PF{% endif %}</p></div>
+    <div><label style="font-weight:700;">Name</label><p style="margin:0;">{{ emp_user.get_full_name|default:emp_user.username }}</p></div>
+    <div><label style="font-weight:700;">Status</label><p style="margin:0;">{% if profile.status == 'EXITED' %}<span class="badge badge-danger">Exited</span>
+      {% elif profile.status == 'ONBOARDING' %}<span class="badge badge-warning">Onboarding</span>
+      {% else %}<span class="badge badge-info">Active</span>{% endif %}</p></div>
+    <div><label style="font-weight:700;">ID Card Received</label><p style="margin:0;">{% if profile.id_card_received %}Yes{% else %}No{% endif %}</p></div>
+    <div><label style="font-weight:700;">Shift</label><p style="margin:0;">{{ profile.get_shift_display|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Type</label><p style="margin:0;">{{ profile.get_work_type_display|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Gender</label><p style="margin:0;">{{ profile.get_gender_display|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Designation / Role</label><p style="margin:0;">{{ profile.designation|default:emp_user.get_role_display }}</p></div>
+    <div><label style="font-weight:700;">Marital Status</label><p style="margin:0;">{{ profile.get_marital_status_display|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Date of Birth</label><p style="margin:0;">{{ profile.date_of_birth|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Date of Joining</label><p style="margin:0;">{{ emp_user.date_joined_company|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Qualification</label><p style="margin:0;">{{ profile.qualification|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Previous Experience</label><p style="margin:0;">{{ profile.previous_experience|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Experience (Current Company)</label><p style="margin:0;">{{ profile.current_company_experience|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Employment Status</label><p style="margin:0;">{{ profile.get_employment_status_display|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Aadhar Number</label><p style="margin:0;">{{ profile.aadhar_display }}</p></div>
+    <div><label style="font-weight:700;">PAN Number</label><p style="margin:0;">{{ profile.pan_no|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Mobile</label><p style="margin:0;">{% if emp_user.phone %}{{ emp_user.phone_country_code }} {{ emp_user.phone }}{% else %}-{% endif %}</p></div>
+    <div><label style="font-weight:700;">Emergency Contact</label><p style="margin:0;">{{ profile.emergency_contact_name|default:"-" }}{% if profile.emergency_contact_phone %} &middot; {{ profile.emergency_contact_country_code }} {{ profile.emergency_contact_phone }}{% endif %}</p></div>
+    <div><label style="font-weight:700;">UAN / PF Number</label><p style="margin:0;">{{ profile.uan_pf_number|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">ESI Number</label><p style="margin:0;">{{ profile.esi_number|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Address</label><p style="margin:0;">{{ profile.address|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Email</label><p style="margin:0;">{{ emp_user.email|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Blood Group</label><p style="margin:0;">{{ profile.blood_group|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Referred By</label><p style="margin:0;">{{ profile.referred_by_name|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Referred By (Enrollment No.)</label><p style="margin:0;">{{ profile.referred_by_enrollment_id|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Reference 1 ({{ profile.get_reference1_type_display|default:"College Faculty / Previous Company" }})</label><p style="margin:0;">{{ profile.reference1_name|default:"-" }}{% if profile.reference1_contact %} &middot; {{ profile.reference1_contact }}{% endif %}</p></div>
+    <div><label style="font-weight:700;">Reference 2 (Relative)</label><p style="margin:0;">{{ profile.reference2_name|default:"-" }}{% if profile.reference2_relation %} ({{ profile.reference2_relation }}){% endif %}{% if profile.reference2_contact %} &middot; {{ profile.reference2_contact }}{% endif %}</p></div>
+    <div><label style="font-weight:700;">Department</label><p style="margin:0;">{{ emp_user.department|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Branch</label><p style="margin:0;">{{ emp_user.branch|default:"-" }}</p></div>
   </div>
 </div>
 
 <div class="card">
   <h3>Bank Details</h3>
-  <div class="info-grid" style="grid-template-columns:1fr 1fr 1fr;">
-    <div><label class="field-label">Account Holder Name</label><p class="field-value">{{ bank_detail.account_holder_name|default:"-" }}</p></div>
-    <div><label class="field-label">Account Number</label><p class="field-value">{{ bank_detail.account_number|default:"-" }}</p></div>
-    <div><label class="field-label">IFSC Code</label><p class="field-value">{{ bank_detail.ifsc_code|default:"-" }}</p></div>
-    <div><label class="field-label">Bank Name</label><p class="field-value">{{ bank_detail.bank_name|default:"-" }}</p></div>
-    <div><label class="field-label">Branch Name</label><p class="field-value">{{ bank_detail.branch_name|default:"-" }}</p></div>
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px 24px;">
+    <div><label style="font-weight:700;">Account Holder Name</label><p style="margin:0;">{{ bank_detail.account_holder_name|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Account Number</label><p style="margin:0;">{{ bank_detail.account_number|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">IFSC Code</label><p style="margin:0;">{{ bank_detail.ifsc_code|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Bank Name</label><p style="margin:0;">{{ bank_detail.bank_name|default:"-" }}</p></div>
+    <div><label style="font-weight:700;">Branch Name</label><p style="margin:0;">{{ bank_detail.branch_name|default:"-" }}</p></div>
   </div>
 </div>
 
 <div class="card">
   <h3>Salary Details</h3>
   {% if salary_structure %}
-  <div class="info-grid" style="grid-template-columns:1fr 1fr;">
-    <div><label class="field-label">Basic</label><p class="field-value">Rs. {{ salary_structure.basic }}</p></div>
-    <div><label class="field-label">HRA</label><p class="field-value">Rs. {{ salary_structure.hra }}</p></div>
-    <div><label class="field-label">Other Allowances</label><p class="field-value">Rs. {{ salary_structure.other_allowances }}</p></div>
-    <div><label class="field-label">Bonus</label><p class="field-value">Rs. {{ salary_structure.bonus }}</p></div>
-    <div><label class="field-label">Gross</label><p class="field-value">Rs. {{ salary_structure.gross }}</p></div>
-    <div><label class="field-label">PF</label><p class="field-value">{% if salary_structure.pf_applicable %}{{ salary_structure.pf_percent }}%{% else %}Not Applicable{% endif %}</p></div>
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px 24px;">
+    <div><label style="font-weight:700;">Basic</label><p style="margin:0;">Rs. {{ salary_structure.basic }}</p></div>
+    <div><label style="font-weight:700;">HRA</label><p style="margin:0;">Rs. {{ salary_structure.hra }}</p></div>
+    <div><label style="font-weight:700;">Other Allowances</label><p style="margin:0;">Rs. {{ salary_structure.other_allowances }}</p></div>
+    <div><label style="font-weight:700;">Bonus</label><p style="margin:0;">Rs. {{ salary_structure.bonus }}</p></div>
+    <div><label style="font-weight:700;">Gross</label><p style="margin:0;">Rs. {{ salary_structure.gross }}</p></div>
+    <div><label style="font-weight:700;">PF</label><p style="margin:0;">{% if salary_structure.pf_applicable %}{{ salary_structure.pf_percent }}%{% else %}Not Applicable{% endif %}</p></div>
   </div>
   {% else %}
   <p class="empty-state">No salary structure set up yet. Use Edit to set one up.</p>
   {% endif %}
-
-  <!-- Increment summary: reflects the latest APPROVED increment the
-       moment HR approves one — this section is queried fresh on every
-       page load, no manual refresh needed. -->
-  <div class="increment-summary-strip">
-    <div><label class="field-label">Approved Increments</label><p class="field-value">{{ increment_count }}</p></div>
-    <div><label class="field-label">Last Increment Date</label><p class="field-value">{{ latest_increment.effective_date|default:"-" }}</p></div>
-    <div><label class="field-label">Salary After Last Increment</label><p class="field-value">{% if latest_increment %}Rs. {{ latest_increment.requested_basic }}{% else %}-{% endif %}</p></div>
-  </div>
   <p style="color:var(--grey-500); font-size:0.8rem; margin:14px 0 0;">
-    <a href="{% url 'increments:history_detail' emp_user.id %}">View full increment history</a>
+    {{ increment_count }} approved increment{{ increment_count|pluralize }}{% if latest_increment %}, most recent effective {{ latest_increment.effective_date }}{% endif %}.
+    <a href="{% url 'increments:history_detail' emp_user.id %}">View increment history</a>
   </p>
 </div>
 
@@ -160,14 +134,14 @@
 <div class="card">
   <h3>Resignation</h3>
   <div style="padding:12px 14px; background:var(--grey-50); border-radius:8px; margin-bottom:14px;">
-    <label class="field-label">Reason</label>
-    <p class="field-value">{{ latest_resignation.reason }}</p>
+    <label style="margin:0 0 4px; font-weight:700;">Reason</label>
+    <p style="margin:0;">{{ latest_resignation.reason }}</p>
   </div>
 
   {% if latest_resignation.status == 'ACCEPTED' %}
   <div style="display:flex; gap:32px; flex-wrap:wrap; margin-bottom:10px;">
-    <div><label class="field-label">Notice Period</label><p class="field-value">{{ latest_resignation.notice_period_days }} days</p></div>
-    <div><label class="field-label">Exit Date</label><p class="field-value">{{ latest_resignation.exit_date }}</p></div>
+    <div><label style="margin:0 0 2px; font-weight:700;">Notice Period</label><p style="margin:0; font-weight:600;">{{ latest_resignation.notice_period_days }} days</p></div>
+    <div><label style="margin:0 0 2px; font-weight:700;">Exit Date</label><p style="margin:0; font-weight:600;">{{ latest_resignation.exit_date }}</p></div>
   </div>
   {% endif %}
 
@@ -179,7 +153,7 @@
     {% elif latest_resignation.status == 'WITHDRAWN' %}<span class="badge badge-success">Withdrawn</span>{% endif %}
   </p>
 
-  {% if latest_resignation.status == 'PENDING' and request.user.role == 'HR' %}
+  {% if latest_resignation.status == 'PENDING' and can_review_resignation %}
   <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
     <form method="post" action="{% url 'employees:reject_resignation' latest_resignation.id %}" style="margin:0;">
       {% csrf_token %}
@@ -222,6 +196,6 @@
     <tr><td>{{ doc.get_doc_type_display }}</td><td>{{ doc.uploaded_at|date:"d M Y" }}</td><td><a href="{{ doc.file.url }}" class="btn btn-outline btn-sm">View</a></td></tr>
     {% empty %}<tr><td colspan="3" class="empty-state">No documents uploaded.</td></tr>{% endfor %}
   </table>
-  <p style="color:var(--grey-500); font-size:0.8rem; margin:10px 0 0;">Read-only. Use Edit to upload or delete official documents.</p>
+  <p style="color:var(--grey-500); font-size:0.8rem; margin:10px 0 0;">Read-only. Use Edit Profile to upload official documents.</p>
 </div>
 {% endblock %}
