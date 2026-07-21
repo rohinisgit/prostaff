@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
 from django.db.models import Q
+from core.utils import get_active_branch
 
 from core.models import User
 from leaves.models import LeaveRequest, LeaveBalance, LeaveNotification
@@ -86,13 +87,14 @@ def my_leaves(request):
 def _team_managed_by(manager):
     return User.objects.filter(
         Q(department__manager=manager) |
-        Q(manager=manager, department__manager__isnull=True)
+        Q(manager=manager, department__manager__isnull=True),
+        branch=manager.branch,
     ).exclude(id=manager.id).distinct()
-
 
 @login_required
 def leave_approvals(request):
     user = request.user
+<<<<<<< HEAD
     today = timezone.localdate()
     # Only show requests whose leave/permission date hasn't passed yet.
     active_leave = (
@@ -132,22 +134,54 @@ def leave_approvals(request):
         context['requests'] = LeaveRequest.objects.filter(active_leave).select_related(
             'user', 'user__profile', 'user__department', 'reviewed_by_manager', 'reviewed_by_hr', 'target_hr'
         )
+=======
+    context = {}
+
+    if user.role == 'HR':
+        active_branch = get_active_branch(request)
+        requests_qs = LeaveRequest.objects.filter(status='PENDING_HR').exclude(user=user).select_related('user', 'user__profile', 'user__department')
+        notices_qs = LeaveRequest.objects.filter(
+            status='APPROVED', reviewed_by_manager__isnull=False
+        ).exclude(user__role='MANAGER').select_related('user', 'reviewed_by_manager').order_by('-manager_reviewed_at')[:20]
+        if active_branch:
+            requests_qs = requests_qs.filter(user__branch=active_branch)
+            notices_qs = notices_qs.filter(user__branch=active_branch)
+        context['requests'] = requests_qs
+        context['manager_approved_notices'] = notices_qs
+
+    elif user.role == 'ADMIN':
+        active_branch = get_active_branch(request)
+        requests_qs = LeaveRequest.objects.select_related('user', 'user__profile', 'user__department').all()
+        if active_branch:
+            requests_qs = requests_qs.filter(user__branch=active_branch)
+        context['requests'] = requests_qs
+        context['manager_approved_notices'] = None
+>>>>>>> pavithra-work
 
     elif user.is_manager():
         team = _team_managed_by(user)
         context['requests'] = LeaveRequest.objects.filter(
             user__in=team, status='PENDING_MANAGER'
+<<<<<<< HEAD
         ).filter(active_leave).select_related('user', 'user__profile', 'user__department')
 
         context['hr_rejected_pending'] = LeaveRequest.objects.filter(
             reviewed_by_manager=user, status='HR_REJECTED_PENDING_MANAGER'
         ).filter(active_leave).select_related('user', 'user__profile', 'user__department')
+=======
+        ).select_related('user', 'user__profile', 'user__department')
+        context['manager_approved_notices'] = None
+>>>>>>> pavithra-work
 
     else:
         messages.error(request, "You do not have permission to view this page.")
         return redirect('core:dashboard')
 
     return render(request, 'leaves/approvals.html', context)
+<<<<<<< HEAD
+=======
+
+>>>>>>> pavithra-work
 @login_required
 def review_leave(request, leave_id, decision):
     user = request.user

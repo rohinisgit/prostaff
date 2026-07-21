@@ -2,6 +2,7 @@
 {% block content %}
 <div class="page-header"><h1>Permission / Leave Approvals</h1></div>
 
+
 {% if hr_rejected_pending %}
 <div class="dir-section-header" style="background:#E4483A;">
   <span class="dir-role-name">HR Declined - Needs Your Final Rejection</span>
@@ -82,23 +83,24 @@
       </td>
     </tr>
     {% empty %}<tr><td colspan="9" class="empty-state">No requests.</td></tr>{% endfor %}
+
   </table>
 </div>
 
 {% if manager_approved_notices is not None %}
 <div class="card">
-  <h3>Employees on Approved Leave </h3>
+  <h3>Employees on Approved Leave <span class="badge badge-info" style="font-weight:500;">Informational</span></h3>
   <table>
-    <tr><th>Employee</th><th>Type</th><th>Details</th><th>Approved On</th></tr>
+    <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Approved By</th><th>Approved On</th></tr>
     {% for r in manager_approved_notices %}
     <tr>
       <td>{{ r.user.get_full_name|default:r.user.username }}</td>
-      <td>{{ r.get_request_type_display }}</td>
-      <td>{% if r.request_type == 'PERMISSION' %}{{ r.permission_date }}{% else %}{{ r.start_date }} - {{ r.end_date }}{% endif %}</td>
-      <td>{{ r.hr_reviewed_at|date:"d M Y, h:i A" }}</td>
+      <td>{{ r.get_leave_type_display }}</td>
+      <td>{{ r.start_date }} - {{ r.end_date }}</td>
+      <td>{{ r.reviewed_by_manager }}</td>
+      <td>{{ r.manager_reviewed_at|date:"d M Y, h:i A" }}</td>
     </tr>
-     {% empty %}<tr><td colspan="4" class="empty-state">No employees currently on approved leave.</td></tr>{% endfor %}
-   </table>
+    {% empty %}<tr><td colspan="5" class="empty-state">No recent manager-approved leaves.</td></tr>{% endfor %}
   </table>
 </div>
 {% endif %}

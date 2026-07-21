@@ -49,3 +49,12 @@ def hr_admin_or_manager_required(view_func):
             return redirect('core:dashboard')
         return view_func(request, *args, **kwargs)
     return _wrapped
+
+def admin_only_required(view_func):
+    @wraps(view_func)
+    @login_required
+    def _wrapped(request, *args, **kwargs):
+        if request.user.role != 'ADMIN':
+            raise PermissionDenied("Only Admin can perform this action.")
+        return view_func(request, *args, **kwargs)
+    return _wrapped

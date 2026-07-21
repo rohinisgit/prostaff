@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse
 from django.utils import timezone
+from core.utils import get_active_branch
 
 from core.decorators import hr_or_admin_required, hr_only_required
 from core.models import User
@@ -100,52 +101,25 @@ def increment_list(request):
         'just_completed': just_completed,
     })
 
-
 @hr_only_required
 def create_increment(request):
     preset_user_id = request.GET.get('user')
+    active_branch = get_active_branch(request)
 
     if request.method == 'POST':
-        form = IncrementRequestForm(request.POST, acting_user=request.user)
-        if form.is_valid():
-            emp_user = form.cleaned_data['user']
-            structure, _ = SalaryStructure.objects.get_or_create(user=emp_user, defaults={'basic': 0})
-            feedback_manager = form.cleaned_data.get('feedback_manager') if emp_user.role == 'EMPLOYEE' else None
-
-            increment = IncrementRequest.objects.create(
-                user=emp_user,
-                current_basic=structure.basic,
-                requested_basic=form.cleaned_data['requested_basic'],
-                effective_date=form.cleaned_data['effective_date'],
-                reason=form.cleaned_data.get('reason', ''),
-                requested_by=request.user,
-                feedback_manager=feedback_manager,
-            )
-
-            # Whatever reminder existed for this employee no longer applies.
-            IncrementCycleSkip.objects.filter(user=emp_user).delete()
-
-            if increment.needs_feedback:
-                messages.success(request, f"Increment request sent to {increment.feedback_manager} for feedback. You can approve or reject it once they respond.")
-                return redirect('increments:list')
-
-            # Managers/Admins skip feedback entirely — approve immediately.
-            increment.status = 'APPROVED'
-            increment.approved_by = request.user
-            increment.save()
-            structure.basic = increment.requested_basic
-            structure.save()
-            return redirect(f"{reverse('increments:list')}?confirm={increment.id}")
+        form = IncrementRequestForm(request.POST, acting_user=request.user, branch=active_branch)
+        # ... rest unchanged
     else:
         initial = {}
         if preset_user_id:
             initial['user'] = preset_user_id
-        form = IncrementRequestForm(acting_user=request.user, initial=initial)
+        form = IncrementRequestForm(acting_user=request.user, branch=active_branch, initial=initial)
 
     users_qs = User.objects.exclude(id=request.user.id)
+    if active_branch:
+        users_qs = users_qs.filter(branch=active_branch)
     user_roles_json = {str(u.id): u.role for u in users_qs}
     return render(request, 'increments/create.html', {'form': form, 'user_roles_json': user_roles_json})
-
 
 @hr_only_required
 def approve_increment(request, increment_id):
