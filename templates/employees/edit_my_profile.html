@@ -33,20 +33,59 @@
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
       <div><label>First Name</label>{{ form.first_name }}{% if form.first_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.first_name.errors.0 }}</p>{% endif %}</div>
       <div><label>Last Name</label>{{ form.last_name }}{% if form.last_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.last_name.errors.0 }}</p>{% endif %}</div>
+      <div><label>Email</label>{{ form.email }}{% if form.email.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.email.errors.0 }}</p>{% endif %}</div>
       <div><label>Phone</label>
         <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.phone_country_code }}{{ form.phone }}</div>
         {% if form.phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.phone.errors.0 }}</p>{% endif %}
       </div>
+      <div><label>Gender</label>{{ form.gender }}</div>
+      <div><label>Marital Status</label>{{ form.marital_status }}</div>
+      <div><label>Date of Birth</label>{{ form.date_of_birth }}</div>
+      <div><label>Blood Group</label>{{ form.blood_group }}</div>
+      <div><label>Qualification</label>{{ form.qualification }}</div>
+      <div><label>Previous Experience</label>{{ form.previous_experience }}</div>
+      <div><label>Experience (Current Company)</label>{{ form.current_company_experience }}</div>
     </div>
     <label>Address</label>
     {{ form.address }}
-    <p style="color:var(--grey-500); font-size:0.8rem; margin-top:-8px;">
-      Everything else (Aadhar, PAN, bank details, emergency contact, employment fields) is managed by HR / your Manager — ask them to update these for you.
-    </p>
-    <button type="submit" class="btn btn-primary" style="margin-top:6px;">Save Changes</button>
   </div>
-</form>
 
+  <div class="card">
+    <h3>Statutory IDs</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>Aadhar Number</label>{{ form.aadhar_no }}{% if form.aadhar_no.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.aadhar_no.errors.0 }}</p>{% endif %}</div>
+      <div><label>PAN Number</label>{{ form.pan_no }}{% if form.pan_no.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.pan_no.errors.0 }}</p>{% endif %}</div>
+      <div><label>UAN / PF Number</label>{{ form.uan_pf_number }}</div>
+      <div><label>ESI Number</label>{{ form.esi_number }}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Emergency Contact</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>Name</label>{{ form.emergency_contact_name }}</div>
+      <div><label>Phone</label>
+        <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.emergency_contact_country_code }}{{ form.emergency_contact_phone }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Bank Details</h3>
+    {% if bank_form.errors %}
+    <ul class="messages"><li class="error">Please fix the highlighted bank detail fields below.</li></ul>
+    {% endif %}
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
+      <div><label>Account Holder Name</label>{{ bank_form.account_holder_name }}</div>
+      <div><label>Account Number</label>{{ bank_form.account_number }}{% if bank_form.account_number.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ bank_form.account_number.errors.0 }}</p>{% endif %}</div>
+      <div><label>IFSC Code</label>{{ bank_form.ifsc_code }}{% if bank_form.ifsc_code.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ bank_form.ifsc_code.errors.0 }}</p>{% endif %}</div>
+      <div><label>Bank Name</label>{{ bank_form.bank_name }}</div>
+      <div><label>Branch Name</label>{{ bank_form.branch_name }}</div>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary" style="margin-top:6px; margin-bottom: 6px;">Save Changes</button>
+</form>
 <div class="card">
   <h3>My Documents</h3>
   <table>
@@ -56,7 +95,7 @@
       <td>{{ doc.get_doc_type_display }}</td>
       <td>{{ doc.uploaded_at|date:"d M Y" }}</td>
       <td>
-        <a href="{{ doc.file.url }}" class="btn btn-outline btn-sm">View</a>
+        <a href="{{ doc.file.url }}" class="btn btn-outline btn-sm" style ="margin-top:2px;">View</a>
         <form method="post" action="{% url 'employees:delete_own_document' doc.id %}" style="display:inline;" onsubmit="return confirm('Delete this document?');">
           {% csrf_token %}
           <button type="submit" class="btn btn-danger btn-sm" style ="margin-top:5px;">Delete</button>
@@ -72,7 +111,7 @@
     <button type="submit" class="btn btn-accent" style="margin-bottom:14px;">Upload</button>
   </form>
   <p style="color:var(--grey-500); font-size:0.8rem; margin:6px 0 0;">
-    Upload your own personal documents here (degree certificate, PAN, Aadhar, ID proof, etc.)
+    Upload your own personal documents here
   </p>
 </div>
 {% endblock %}
