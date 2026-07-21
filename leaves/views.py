@@ -94,7 +94,7 @@ def _team_managed_by(manager):
 @login_required
 def leave_approvals(request):
     user = request.user
-<<<<<<< HEAD
+
     today = timezone.localdate()
     # Only show requests whose leave/permission date hasn't passed yet.
     active_leave = (
@@ -134,7 +134,7 @@ def leave_approvals(request):
         context['requests'] = LeaveRequest.objects.filter(active_leave).select_related(
             'user', 'user__profile', 'user__department', 'reviewed_by_manager', 'reviewed_by_hr', 'target_hr'
         )
-=======
+
     context = {}
 
     if user.role == 'HR':
@@ -156,32 +156,27 @@ def leave_approvals(request):
             requests_qs = requests_qs.filter(user__branch=active_branch)
         context['requests'] = requests_qs
         context['manager_approved_notices'] = None
->>>>>>> pavithra-work
+
 
     elif user.is_manager():
         team = _team_managed_by(user)
         context['requests'] = LeaveRequest.objects.filter(
             user__in=team, status='PENDING_MANAGER'
-<<<<<<< HEAD
-        ).filter(active_leave).select_related('user', 'user__profile', 'user__department')
 
-        context['hr_rejected_pending'] = LeaveRequest.objects.filter(
-            reviewed_by_manager=user, status='HR_REJECTED_PENDING_MANAGER'
-        ).filter(active_leave).select_related('user', 'user__profile', 'user__department')
-=======
+        
         ).select_related('user', 'user__profile', 'user__department')
         context['manager_approved_notices'] = None
->>>>>>> pavithra-work
+
 
     else:
         messages.error(request, "You do not have permission to view this page.")
         return redirect('core:dashboard')
 
     return render(request, 'leaves/approvals.html', context)
-<<<<<<< HEAD
-=======
 
->>>>>>> pavithra-work
+
+
+
 @login_required
 def review_leave(request, leave_id, decision):
     user = request.user
