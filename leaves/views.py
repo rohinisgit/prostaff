@@ -161,8 +161,6 @@ def leave_approvals(request):
             user__in=team, status='PENDING_MANAGER'
         ).select_related('user', 'user__profile', 'user__department')
         context['manager_approved_notices'] = None
-        ).filter(active_leave).select_related('user', 'user__profile', 'user__department')
-
         context['hr_rejected_pending'] = LeaveRequest.objects.filter(
             reviewed_by_manager=user, status='HR_REJECTED_PENDING_MANAGER'
         ).filter(active_leave).select_related('user', 'user__profile', 'user__department')
