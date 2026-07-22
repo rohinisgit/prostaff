@@ -158,12 +158,17 @@ def leave_approvals(request):
         requests_qs = LeaveRequest.objects.filter(
             user__in=team, status='PENDING_MANAGER'
         ).select_related('user', 'user__profile', 'user__department')
-        context['requests'] = _not_expired(requests_qs, today)
+    elif user.is_manager():
+            team = _team_managed_by(user)
+            requests_qs = LeaveRequest.objects.filter(
+                user__in=team, status='PENDING_MANAGER'
+            ).select_related('user', 'user__profile', 'user__department')
+            context['requests'] = _not_expired(requests_qs, today)
 
-        rejected_qs = LeaveRequest.objects.filter(
-            user__in=team, status='HR_REJECTED_PENDING_MANAGER'
-        ).select_related('user', 'user__profile', 'user__department')
-        context['hr_rejected_pending'] = _not_expired(rejected_qs, today)
+            rejected_qs = LeaveRequest.objects.filter(
+                reviewed_by_manager=user, status='HR_REJECTED_PENDING_MANAGER'
+            ).select_related('user', 'user__profile', 'user__department')
+            context['hr_rejected_pending'] = _not_expired(rejected_qs, today)
 
     else:
         messages.error(request, "You do not have permission to view this page.")
