@@ -118,7 +118,6 @@
           </div>
         </td>
         <td class="payroll-actions-cell">
-          {% if request.user.role != 'HR' %}<span class="badge badge-info">View only</span>{% endif %}
           <a href="{% url 'payroll:employee_payroll_history' item.user.id %}" class="btn btn-outline btn-sm">View Slips</a>
         </td>
       </tr>

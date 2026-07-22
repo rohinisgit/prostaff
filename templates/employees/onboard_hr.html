@@ -1,31 +1,81 @@
 {% extends 'core/base.html' %}
+{% load form_extras %}
 {% block content %}
-<div class="page-header"><h1>Onboard Hr</h1></div>
+<div class="page-header"><h1>Onboard HR / Admin</h1></div>
 <div class="card">
   {% if form.errors %}
   <ul class="messages"><li class="error">Please fix the highlighted fields below.</li></ul>
   {% endif %}
-  <form method="post">
+  <form method="post" id="onboard-form">
     {% csrf_token %}
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px;">
-      <div><label>Username</label>{{ form.username }}{% if form.username.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.username.errors.0 }}</p>{% endif %}</div>
-      <div><label>First Name</label>{{ form.first_name }}{% if form.first_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.first_name.errors.0 }}</p>{% endif %}</div>
-      <div><label>Last Name</label>{{ form.last_name }}{% if form.last_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.last_name.errors.0 }}</p>{% endif %}</div>
-      <div><label>Email</label>{{ form.email }}{% if form.email.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.email.errors.0 }}</p>{% endif %}</div>
+    
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 20px; margin-top:14px;">
+      <div><label>Username</label>{{ form.username|add_error_class }}{% if form.username.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.username.errors.0 }}</p>{% endif %}</div>
+      <div><label>First Name</label>{{ form.first_name|add_error_class }}{% if form.first_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.first_name.errors.0 }}</p>{% endif %}</div>
+      <div><label>Last Name</label>{{ form.last_name|add_error_class }}</div>
+      <div><label>Email</label>{{ form.email|add_error_class }}{% if form.email.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.email.errors.0 }}</p>{% endif %}</div>
       <div><label>Phone</label>
-  <div style="display:flex; gap:8px; margin-bottom:14px;">
-    {{ form.phone_country_code }}
-    {{ form.phone }}
-  </div>
-  {% if form.phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.phone.errors.0 }}</p>{% endif %}
-</div>
-      <div><label>Role</label>{{ form.role }}</div>
-      <div><label>Department</label>{{ form.department }}</div>
-      <div><label>Branch</label>{{ form.branch }}{% if locked_branch %}<p style="color:var(--grey-500); font-size:0.8rem; margin:-10px 0 10px;">New hires join your own branch automatically.</p>{% endif %}</div>
-      <div><label>Joining Date</label>{{ form.date_joined_company }}</div>
-      <div><label>Temporary Password</label>{{ form.password }}{% if form.password.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.password.errors.0 }}</p>{% endif %}</div>
+        <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.phone_country_code }}{{ form.phone|add_error_class }}</div>
+      </div>
+      <div><label>Department</label>{{ form.department|add_error_class }}</div>
+      <div><label>Joining Date</label>{{ form.date_joined_company|add_error_class }}{% if form.date_joined_company.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.date_joined_company.errors.0 }}</p>{% endif %}</div>
+      <div><label>Temporary Password</label>{{ form.password|add_error_class }}{% if form.password.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.password.errors.0 }}</p>{% endif %}</div>
+     <div><label>Role</label>
+      {{ form.role|add_error_class }}
+      </div>
     </div>
-    <button type="submit" class="btn btn-primary">Create Employee</button>
+
+    <div id="single-branch-wrap" style="margin-top:14px;">
+      <label>Branch</label>
+      {{ form.branch|add_error_class }}
+      {% if form.branch.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.branch.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div id="multi-branch-wrap" style="margin-top:14px;">
+      <label>Branch Access</label>
+      <p style="color:var(--grey-500); font-size:0.8rem; margin-top:-4px;">Select every branch this user should be able to view and manage.</p>
+      <label style="display:inline-flex; align-items:center; gap:6px; font-weight:600; cursor:pointer; margin-bottom:6px;">
+        <input type="checkbox" id="branch-select-all"> Select All Branches
+      </label>
+      <div class="branch-checkbox-grid{% if form.accessible_branches.errors %} branch-checkbox-grid-invalid{% endif %}">
+        {% for checkbox in form.accessible_branches %}
+        <label class="branch-checkbox">{{ checkbox.tag }} {{ checkbox.choice_label }}</label>
+        {% endfor %}
+      </div>
+      {% if form.accessible_branches.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:6px 0 14px;">{{ form.accessible_branches.errors.0 }}</p>{% endif %}
+    </div>
+
+    <button type="submit" class="btn btn-primary" style="margin-top:16px;">Onboard</button>
   </form>
 </div>
+
+<script>
+(function () {
+  var roleSelect = document.querySelector('#onboard-form select[name="role"]');
+  var singleWrap = document.getElementById('single-branch-wrap');
+  var multiWrap = document.getElementById('multi-branch-wrap');
+
+  function update() {
+    var role = roleSelect.value;
+    var needsSingle = (role === 'EMPLOYEE' || role === 'MANAGER');
+    singleWrap.style.display = needsSingle ? '' : 'none';
+    multiWrap.style.display = needsSingle ? 'none' : '';
+  }
+
+  roleSelect.addEventListener('change', update);
+  update();
+
+  var selectAll = document.getElementById('branch-select-all');
+  var boxes = document.querySelectorAll('.branch-checkbox-grid input[type=checkbox]');
+  selectAll.addEventListener('change', function () {
+    boxes.forEach(function (b) { b.checked = selectAll.checked; });
+  });
+  boxes.forEach(function (b) {
+    b.addEventListener('change', function () {
+      selectAll.checked = Array.prototype.every.call(boxes, function (x) { return x.checked; });
+    });
+  });
+})();
+</script>
 {% endblock %}

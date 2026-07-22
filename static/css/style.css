@@ -732,3 +732,13 @@ table th:last-child, table td:last-child {
   padding-top: 14px;
   border-top: 1px solid var(--grey-100);
 }
+.branch-checkbox-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:10px;
+  padding:14px 16px; background:var(--grey-50); border-radius:8px; margin-bottom:10px;
+}
+.branch-checkbox { display:flex; align-items:center; gap:8px; font-weight:500; font-size:0.88rem; cursor:pointer; }
+.form-control.is-invalid, select.is-invalid {
+  border-color: #E4483A !important;
+  background: #FFF5F5;
+}
+.branch-checkbox-grid-invalid { border: 1px solid #E4483A; }

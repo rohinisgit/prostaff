@@ -28,6 +28,7 @@ from payroll.models import SalaryStructure
 from increments.models import IncrementRequest
 from core.utils import get_active_branch, user_can_switch_branch
 from core.decorators import role_required
+from employees.forms import OnboardHRForm
 
 
 def _present_user_ids_today():
@@ -73,6 +74,25 @@ def _department_sort_key(dept_name):
     else:
         priority = 2
     return (priority, lower)
+
+ROLE_WITHIN_DEPT_PRIORITY = {'MANAGER': 0, 'EMPLOYEE': 1}
+
+
+def _directory_sort_key(emp):
+    """HR first (alphabetical, no department grouping). Everyone else is
+    grouped by department first (Data Entry, then Software, then the rest
+    alphabetically) — and within each department, the Manager appears
+    before that department's Employees, alphabetical within each group.
+    Reads emp.role fresh each time, so a promotion/demotion automatically
+    moves someone into the right spot without any extra bookkeeping."""
+    name = (emp.first_name or emp.username).lower()
+
+    if emp.role == 'HR':
+        return (0, (0, ''), 0, name)
+
+    dept_key = _department_sort_key(emp.department.name if emp.department else 'zzz_no_department')
+    role_within_dept = ROLE_WITHIN_DEPT_PRIORITY.get(emp.role, 2)
+    return (1, dept_key, role_within_dept, name)
 
 
 @login_required
@@ -321,7 +341,11 @@ def employee_directory(request):
     if request.user.role == 'HR':
         employees = employees.exclude(role__in=['HR', 'ADMIN'])
     if active_branch:
-        employees = employees.filter(branch=active_branch)
+        employees = employees.filter(
+            Q(branch=active_branch) |
+            Q(role='ADMIN') |
+            Q(role='HR', accessible_branches=active_branch)
+        ).distinct()
 
     if query:
         employees = employees.filter(
@@ -369,10 +393,7 @@ def employee_directory(request):
         emp.display_status = emp_status
         employee_rows.append(emp)
 
-    employee_rows.sort(key=lambda emp: (
-        _department_sort_key(emp.department.name if emp.department else 'zzz_no_department'),
-        (emp.first_name or emp.username).lower(),
-    ))
+    employee_rows.sort(key=_directory_sort_key)
 
     return render(request, 'employees/directory.html', {
         'employees': employee_rows,
@@ -484,9 +505,6 @@ def delete_document(request, user_id, doc_id):
 
 @hr_admin_or_manager_required
 def edit_employee_profile(request, user_id):
-    """Editable view — profile fields, extended identity fields, bank
-    details, status, role & access, salary, and document uploads all live
-    here. Reachable by HR, Admin, or the employee's own Manager."""
     emp_user = get_object_or_404(User, id=user_id)
 
     if not _can_edit_identity(request.user, emp_user):
@@ -504,29 +522,44 @@ def edit_employee_profile(request, user_id):
         identity_form = EmployeeIdentityForm(request.POST, request.FILES, instance=profile)
         bank_form = BankDetailForm(request.POST, instance=bank_detail)
 
-        # Enrollment ID / Employee ID: the UI only lets HR edit the numeric
-        # suffix; the branch prefix is re-attached here server-side so it
-        # can never be spoofed to a different branch's prefix.
         enrollment_suffix = request.POST.get('enrollment_suffix', '').strip()
         employee_id_suffix = request.POST.get('employee_id_suffix', '').strip()
 
-        if form.is_valid() and identity_form.is_valid() and bank_form.is_valid():
+        saved_anything = False
+
+        # Basic profile section — save it on its own if it's valid,
+        # regardless of what happens with Identity or Bank below.
+        if form.is_valid():
             user_obj = form.save(commit=False)
             if employee_id_suffix:
                 user_obj.employee_id = f"{employee_id_prefix}{employee_id_suffix}"
             user_obj.save()
-
+            if emp_user.role == 'HR':
+                user_obj.accessible_branches.set(form.cleaned_data.get('accessible_branches'))
+            saved_anything = True
+        else:
+            messages.error(request, "Some basic profile fields need fixing — those weren't saved.")
+        # Identity / extended fields — independent of the other two sections.
+        if identity_form.is_valid():
             profile_obj = identity_form.save(commit=False)
             if enrollment_suffix:
                 profile_obj.enrollment_id = f"{enrollment_prefix}{enrollment_suffix}"
             profile_obj.save()
-
-            bank_form.save()
-
-            messages.success(request, f"{emp_user}'s profile has been updated.")
-            return redirect('employees:edit_employee_profile', user_id=emp_user.id)
+            saved_anything = True
         else:
-            messages.error(request, "Please fix the highlighted fields below.")
+            messages.error(request, "Some identity fields need fixing — those weren't saved.")
+
+        # Bank details — independent of the other two sections.
+        if bank_form.is_valid():
+            bank_form.save()
+            saved_anything = True
+        else:
+            messages.error(request, "Some bank details need fixing — those weren't saved.")
+
+        if saved_anything:
+            messages.success(request, f"{emp_user}'s profile has been updated.")
+
+        return redirect('employees:edit_employee_profile', user_id=emp_user.id)
     else:
         form = HREmployeeEditForm(instance=emp_user)
         identity_form = EmployeeIdentityForm(instance=profile)
@@ -549,7 +582,6 @@ def edit_employee_profile(request, user_id):
         'enrollment_suffix': split_id(profile.enrollment_id, enrollment_prefix),
         'employee_id_suffix': split_id(emp_user.employee_id, employee_id_prefix),
     })
-
 
 @hr_or_admin_required
 def change_role(request, user_id):
@@ -672,15 +704,62 @@ def my_resignation(request):
 @admin_only_required
 def onboard_hr(request):
     if request.method == 'POST':
-        form = NewEmployeeForm(request.POST)
+        form = OnboardHRForm(request.POST)
         if form.is_valid():
+            role = form.cleaned_data['role']
             user = form.save(commit=False)
-            user.role = User.ROLE_HR
-            user.manager = None
-            user.save()
-            EmployeeProfile.objects.create(user=user, status='ACTIVE')
-            messages.success(request, f'{user} onboarded as HR successfully.')
+            user.role = role
+            user.set_password(form.cleaned_data['password'])
+
+            if role in (User.ROLE_EMPLOYEE, User.ROLE_MANAGER):
+                user.branch = form.cleaned_data['branch']
+                department = form.cleaned_data.get('department')
+                if department and department.manager_id and role != User.ROLE_MANAGER:
+                    user.manager = department.manager
+                else:
+                    user.manager = None
+                user.employee_id = generate_employee_id(user.branch)
+                user.save()
+
+                profile = EmployeeProfile.objects.create(user=user, status='ONBOARDING')
+                profile.enrollment_id = generate_enrollment_id(user.branch)
+                profile.save()
+                BankDetail.objects.get_or_create(user=user)
+
+                messages.success(
+                    request,
+                    f'{user} onboarded successfully (Employee ID {user.employee_id}, Enrollment ID {profile.enrollment_id}).'
+                )
+
+            else:  # HR or ADMIN
+                user.manager = None
+                user.save()
+                if role == User.ROLE_HR:
+                    user.accessible_branches.set(form.cleaned_data['accessible_branches'])
+                EmployeeProfile.objects.create(user=user, status='ONBOARDING')
+                messages.success(request, f'{user} onboarded as {user.get_role_display()} successfully.')
+
             return redirect('employees:employee_detail', user_id=user.id)
     else:
-        form = NewEmployeeForm(initial={'role': 'HR'})
+        form = OnboardHRForm()
     return render(request, 'employees/onboard_hr.html', {'form': form})
+
+@login_required
+def complete_onboarding(request, user_id):
+    emp_user = get_object_or_404(User, id=user_id)
+    user = request.user
+
+    can_complete = (
+        (user.role == 'HR' and emp_user.role in ('EMPLOYEE', 'MANAGER')) or
+        (user.role == 'ADMIN' and emp_user.role in ('HR', 'ADMIN'))
+    )
+    if not can_complete:
+        messages.error(request, "You do not have permission to activate this user.")
+        return redirect('employees:employee_detail', user_id=emp_user.id)
+
+    profile, _ = EmployeeProfile.objects.get_or_create(user=emp_user)
+    if request.method == 'POST':
+        profile.status = 'ACTIVE'
+        profile.save()
+        messages.success(request, f"{emp_user} has completed onboarding and is now Active.")
+    return redirect('employees:employee_detail', user_id=emp_user.id)
