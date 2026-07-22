@@ -55,6 +55,11 @@ class User(AbstractUser):
     branch = models.ForeignKey(
         Branch, null=True, blank=True, on_delete=models.SET_NULL, related_name='staff'
     )
+    accessible_branches = models.ManyToManyField(
+        'core.Branch', blank=True, related_name='hr_admins',
+        help_text="Branches this HR user can view/manage. Ignored for Admin — Admin always has access to every branch."
+    )
+
     # Only ever set by Admin (see toggle_branch_admin_access). An HR user
     # with this True can switch between and see every branch. Every other
     # HR is locked to their own assigned branch everywhere branch

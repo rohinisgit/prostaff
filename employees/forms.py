@@ -6,6 +6,8 @@ from core.validators import (
 )
 from employees.models import EmployeeProfile, EmployeeDocument, ResignationRequest, BankDetail
 from core.models import User
+from core.models import Branch 
+
 
 NAME_ATTRS = {
     'pattern': "[A-Za-z0-9' -]*", 'title': "Letters, numbers, spaces, hyphens and apostrophes only.",
@@ -47,43 +49,75 @@ AADHAR_ATTRS = {
 
 
 class EmployeeSelfEditForm(forms.ModelForm):
-    """Fields an employee is allowed to edit on their own profile.
-    Identity/HR fields (Aadhar, PAN, bank details, emergency contact, etc.)
-    are HR/Admin/Manager-only — see EmployeeIdentityForm and BankDetailForm."""
+    """Fields an employee can edit on their own profile — basic info plus
+    the extended identity fields (Aadhar, PAN, emergency contact, etc.)
+    they fill in themselves. Bank details are handled by a separate
+    BankDetailForm on the same page. Status, enrollment ID, employee ID
+    and a few other administrative fields stay HR/Admin/Manager-only —
+    see EmployeeIdentityForm."""
     first_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     last_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
+    email = forms.EmailField(required=False, widget=forms.EmailInput())
     phone_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
     phone = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
 
+    aadhar_no = forms.CharField(max_length=14, required=False, validators=[aadhar_validator], widget=forms.TextInput(attrs=AADHAR_ATTRS))
+    pan_no = forms.CharField(max_length=10, required=False, validators=[pan_validator], widget=forms.TextInput(attrs=PAN_ATTRS))
+    emergency_contact_name = forms.CharField(max_length=100, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
+    emergency_contact_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
+    emergency_contact_phone = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
+
     class Meta:
         model = EmployeeProfile
-        fields = ['address', 'profile_photo']
+        fields = [
+            'address', 'profile_photo',
+            'gender', 'marital_status', 'date_of_birth',
+            'qualification', 'previous_experience', 'current_company_experience',
+            'blood_group', 'uan_pf_number', 'esi_number',
+            'aadhar_no', 'pan_no',
+            'emergency_contact_name', 'emergency_contact_country_code', 'emergency_contact_phone',
+        ]
         widgets = {
             'address': forms.Textarea(attrs={'rows': 3}),
+            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
+            'previous_experience': forms.TextInput(attrs={'placeholder': 'e.g. 2 years at XYZ Corp'}),
+            'current_company_experience': forms.TextInput(attrs={'placeholder': 'e.g. 1.5 years'}),
         }
 
     def __init__(self, *args, **kwargs):
         self.user_instance = kwargs.pop('user_instance', None)
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs.setdefault('class', 'form-control')
+        for name, field in self.fields.items():
+            if not isinstance(field.widget, forms.ClearableFileInput):
+                field.widget.attrs.setdefault('class', 'form-control')
         if self.user_instance:
             self.fields['first_name'].initial = self.user_instance.first_name
             self.fields['last_name'].initial = self.user_instance.last_name
+            self.fields['email'].initial = self.user_instance.email
             self.fields['phone'].initial = self.user_instance.phone
             self.fields['phone_country_code'].initial = self.user_instance.phone_country_code
+        # Show Aadhar pre-formatted with spaces even though it's stored raw.
+        if self.instance and self.instance.pk and self.instance.aadhar_no:
+            digits = self.instance.aadhar_no
+            self.initial['aadhar_no'] = ' '.join(digits[i:i + 4] for i in range(0, len(digits), 4))
+
+    def clean_aadhar_no(self):
+        return self.cleaned_data.get('aadhar_no', '').replace(' ', '')
+
+    def clean_pan_no(self):
+        return self.cleaned_data.get('pan_no', '').upper()
 
     def save(self, commit=True):
         profile = super().save(commit=commit)
         if self.user_instance:
             self.user_instance.first_name = self.cleaned_data.get('first_name', '')
             self.user_instance.last_name = self.cleaned_data.get('last_name', '')
+            self.user_instance.email = self.cleaned_data.get('email', '')
             self.user_instance.phone = self.cleaned_data.get('phone', '')
             self.user_instance.phone_country_code = self.cleaned_data.get('phone_country_code') or '+91'
             if commit:
                 self.user_instance.save()
         return profile
-
 
 class NewEmployeeForm(forms.ModelForm):
     """Used by HR to onboard a new employee (creates the User).
@@ -121,12 +155,21 @@ class NewEmployeeForm(forms.ModelForm):
 
 class HREmployeeEditForm(forms.ModelForm):
     """HR/Admin/Manager edits an employee's core profile details —
-    name, contact info, department, employee ID, joining date."""
+    name, contact info, department, employee ID, joining date.
+    For HR accounts specifically, branch access is multi-select
+    (accessible_branches) instead of a single branch."""
     first_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     last_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     phone_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
     phone = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
     employee_id = forms.CharField(max_length=20, required=False, validators=[alnum_id_validator], widget=forms.TextInput(attrs={**ID_ATTRS, 'readonly': 'readonly'}))
+    accessible_branches = forms.ModelMultipleChoiceField(
+        queryset=Branch.objects.all().order_by('code'),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label="Branch Access",
+        help_text="Select every branch this HR user can view and manage.",
+    )
 
     class Meta:
         model = User
@@ -135,10 +178,12 @@ class HREmployeeEditForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs.setdefault('class', 'form-control')
-
-
+        for name, field in self.fields.items():
+            if name != 'accessible_branches':
+                field.widget.attrs.setdefault('class', 'form-control')
+        if self.instance and self.instance.pk:
+            self.fields['accessible_branches'].initial = self.instance.accessible_branches.all()
+            
 class EmployeeIdentityForm(forms.ModelForm):
     """Extended identity / HR fields. Only ever reachable by HR, Admin, or
     the employee's Manager — never editable by the employee themself."""
@@ -166,6 +211,7 @@ class EmployeeIdentityForm(forms.ModelForm):
             'old_joining_date',
         ]
         widgets = {
+            'address': forms.Textarea(attrs={'rows': 3}),
             'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
             'old_joining_date': forms.DateInput(attrs={'type': 'date'}),
             'previous_experience': forms.TextInput(attrs={'placeholder': 'e.g. 2 years at XYZ Corp'}),
@@ -271,3 +317,45 @@ class ResignationRequestForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.setdefault('class', 'form-control')
+  
+class OnboardHRForm(forms.ModelForm):
+    password = forms.CharField(widget=forms.PasswordInput, help_text="Temporary password for this account")
+    first_name = forms.CharField(max_length=150, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
+    last_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
+    phone_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
+    phone = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
+    role = forms.ChoiceField(choices=User.ROLE_CHOICES, required=True)
+
+    branch = forms.ModelChoiceField(queryset=Branch.objects.all().order_by('code'), required=False, label="Branch")
+    accessible_branches = forms.ModelMultipleChoiceField(
+        queryset=Branch.objects.all().order_by('code'),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label="Branch Access",
+        help_text="Select every branch this user should be able to view and manage.",
+    )
+
+    class Meta:
+        model = User
+        fields = ['username', 'first_name', 'last_name', 'email',
+                  'role', 'department', 'branch', 'date_joined_company', 'phone_country_code', 'phone', 'password']
+        widgets = {
+            'date_joined_company': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if name != 'accessible_branches':
+                field.widget.attrs.setdefault('class', 'form-control')
+
+    def clean(self):
+        cleaned = super().clean()
+        role = cleaned.get('role')
+        if role in (User.ROLE_EMPLOYEE, User.ROLE_MANAGER):
+            if not cleaned.get('branch'):
+                self.add_error('branch', "Select a branch for this role.")
+        elif role == User.ROLE_HR:
+            if not cleaned.get('accessible_branches'):
+                self.add_error('accessible_branches', "Select at least one branch this HR user can access.")
+        return cleaned

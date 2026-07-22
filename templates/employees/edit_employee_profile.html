@@ -61,7 +61,21 @@
       <div><label>Last Name</label>{{ form.last_name }}{% if form.last_name.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.last_name.errors.0 }}</p>{% endif %}</div>
       <div><label>Email</label>{{ form.email }}{% if form.email.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.email.errors.0 }}</p>{% endif %}</div>
       <div><label>Department</label>{{ form.department }}</div>
+      {% if emp_user.role == 'HR' %}
+      <div style="grid-column:1 / -1; margin-bottom:14px;">
+        <label>Branch Access</label>
+        <p style="color:var(--grey-500); font-size:0.8rem; margin-top:-4px;">Select every branch this HR user can view and manage.</p>
+        <div class="branch-checkbox-grid">
+          {% for checkbox in form.accessible_branches %}
+          <label class="branch-checkbox">{{ checkbox.tag }} {{ checkbox.choice_label }}</label>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
       <div><label>Branch</label>{{ form.branch }}</div>
+      {% endif %}
+
+      
       <div><label>Phone</label>
         <div style="display:flex; gap:8px; margin-bottom:14px;">{{ form.phone_country_code }}{{ form.phone }}</div>
         {% if form.phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ form.phone.errors.0 }}</p>{% endif %}
@@ -96,7 +110,7 @@
       <div><label>Emergency Contact Phone</label>
         <div style="display:flex; gap:8px; margin-bottom:14px;">{{ identity_form.emergency_contact_country_code }}{{ identity_form.emergency_contact_phone }}</div>
       </div>
-      <div style="grid-column:1 / -1;"><label>Address</label>{{ form.address }}</div>
+      <div style="grid-column:1 / -1;"><label>Address</label>{{ identity_form.address }}</div>
     </div>
   </div>
 

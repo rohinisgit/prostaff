@@ -9,7 +9,7 @@ from attendance.models import AttendanceRecord
 from leaves.models import LeaveRequest
 from employees.models import EmployeeProfile
 from django.contrib import messages
-from core.utils import get_active_branch
+from core.utils import get_active_branch, user_can_switch_branch
 from core.models import Branch
 
 
@@ -24,16 +24,19 @@ class HRLoginView(auth_views.LoginView):
 def set_active_branch(request):
     if request.method == 'POST':
         user = request.user
-        can_switch = user.role == 'ADMIN' or (user.role == 'HR' and user.can_access_all_branches)
+        can_switch = user_can_switch_branch(user)
         if not can_switch:
             messages.error(request, "You do not have permission to switch branches.")
             return redirect('core:dashboard')
         branch_id = request.POST.get('branch_id')
         if branch_id:
-            request.session['active_branch_id'] = branch_id
-            branch = Branch.objects.filter(id=branch_id).first()
+            allowed = Branch.objects.all() if user.role == 'ADMIN' else user.accessible_branches.all()
+            branch = allowed.filter(id=branch_id).first()
             if branch:
+                request.session['active_branch_id'] = branch_id
                 messages.success(request, f"You are now viewing {branch.name} ({branch.code}).")
+            else:
+                messages.error(request, "You don't have access to that branch.")
         return redirect(request.POST.get('next') or 'core:dashboard')
     return redirect('core:dashboard')
 
@@ -45,13 +48,15 @@ def dashboard(request):
     today = timezone.localdate()
     context['today_record'] = AttendanceRecord.objects.filter(user=user, date=today).first()
 
-    active_branch = get_active_branch(request)
+    active_branch = get_active_branch(request)   # <-- moved above the if/elif, computed once for every role
 
     if user.role == 'ADMIN':
-        branch_users = EmployeeProfile.objects.filter(user__branch=active_branch) if active_branch else EmployeeProfile.objects.all()
-        context['hr_count'] = branch_users.filter(user__role='HR').count()
-        context['manager_count'] = branch_users.filter(user__role='MANAGER').count()
-        context['employee_count'] = branch_users.filter(user__role='EMPLOYEE').count()
+        base_qs = EmployeeProfile.objects.filter(status='ACTIVE').select_related('user')
+        if active_branch:
+            base_qs = base_qs.filter(user__branch=active_branch)
+        context['hr_count'] = base_qs.filter(user__role='HR').count()
+        context['manager_count'] = base_qs.filter(user__role='MANAGER').count()
+        context['employee_count'] = base_qs.filter(user__role='EMPLOYEE').count()
 
     elif user.role == 'HR':
         base_qs = EmployeeProfile.objects.exclude(user__role__in=['HR', 'ADMIN'])

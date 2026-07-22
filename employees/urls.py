@@ -28,8 +28,10 @@ urlpatterns = [
     path('<int:user_id>/team-member/', views.team_member_detail, name='team_member_detail'),
     path('resignation/mine/', views.my_resignation, name='my_resignation'),
     path('<int:user_id>/toggle-branch-access/', views.toggle_branch_admin_access, name='toggle_branch_admin_access'),
+    path('onboard-hr/', views.onboard_hr, name='onboard_hr'),
 
     path('me/edit/', views.edit_my_profile, name='edit_my_profile'),
 
     path('onboard-hr/', views.onboard_hr, name='onboard_hr'),
+
 ]

@@ -90,30 +90,43 @@ def _team_managed_by(manager):
         Q(manager=manager, department__manager__isnull=True),
         branch=manager.branch,
     ).exclude(id=manager.id).distinct()
+def _not_expired(qs, today):
+    """Excludes permission/leave requests whose date (or end date, for
+    multi-day leave) has already passed — keeps the approvals queue clean
+    of stale entries regardless of their status."""
+    return qs.filter(
+        Q(request_type='PERMISSION', permission_date__gte=today) |
+        Q(request_type='LEAVE', end_date__gte=today)
+    )
+
 
 @login_required
 def leave_approvals(request):
     user = request.user
-
     today = timezone.localdate()
-    # Only show requests whose leave/permission date hasn't passed yet.
-    active_leave = (
-        Q(request_type='LEAVE', end_date__gte=today) |
-        Q(request_type='PERMISSION', permission_date__gte=today)
-    )
     context = {'manager_approved_notices': None, 'hr_rejected_pending': None}
 
     if user.role == 'HR':
-        context['requests'] = LeaveRequest.objects.filter(status='PENDING_HR').filter(active_leave).exclude(user=user).filter(
+        active_branch = get_active_branch(request)
+
+        requests_qs = LeaveRequest.objects.filter(
+            status='PENDING_HR'
+        ).exclude(user=user).filter(
             Q(target_hr__isnull=True) | Q(target_hr=user)
         ).select_related('user', 'user__profile', 'user__department', 'reviewed_by_manager')
+        if active_branch:
+            requests_qs = requests_qs.filter(user__branch=active_branch)
+        requests_qs = _not_expired(requests_qs, today)
+        context['requests'] = requests_qs
 
-        today = timezone.localdate()
         now_time = timezone.localtime().time()
 
         candidates = LeaveRequest.objects.filter(
             status='APPROVED'
-        ).exclude(user=user).select_related('user', 'reviewed_by_manager').order_by('-hr_reviewed_at')[:50]
+        ).exclude(user=user).select_related('user', 'reviewed_by_manager').order_by('-hr_reviewed_at')
+        if active_branch:
+            candidates = candidates.filter(user__branch=active_branch)
+        candidates = candidates[:50]
 
         still_active = []
         for r in candidates:
@@ -131,51 +144,32 @@ def leave_approvals(request):
         context['manager_approved_notices'] = still_active
 
     elif user.role == 'ADMIN':
-        context['requests'] = LeaveRequest.objects.filter(active_leave).select_related(
+        active_branch = get_active_branch(request)
+        requests_qs = LeaveRequest.objects.select_related(
             'user', 'user__profile', 'user__department', 'reviewed_by_manager', 'reviewed_by_hr', 'target_hr'
-        )
-
-    context = {}
-
-    if user.role == 'HR':
-        active_branch = get_active_branch(request)
-        requests_qs = LeaveRequest.objects.filter(status='PENDING_HR').exclude(user=user).select_related('user', 'user__profile', 'user__department')
-        notices_qs = LeaveRequest.objects.filter(
-            status='APPROVED', reviewed_by_manager__isnull=False
-        ).exclude(user__role='MANAGER').select_related('user', 'reviewed_by_manager').order_by('-manager_reviewed_at')[:20]
+        ).all()
         if active_branch:
             requests_qs = requests_qs.filter(user__branch=active_branch)
-            notices_qs = notices_qs.filter(user__branch=active_branch)
+        requests_qs = _not_expired(requests_qs, today)
         context['requests'] = requests_qs
-        context['manager_approved_notices'] = notices_qs
-
-    elif user.role == 'ADMIN':
-        active_branch = get_active_branch(request)
-        requests_qs = LeaveRequest.objects.select_related('user', 'user__profile', 'user__department').all()
-        if active_branch:
-            requests_qs = requests_qs.filter(user__branch=active_branch)
-        context['requests'] = requests_qs
-        context['manager_approved_notices'] = None
-
 
     elif user.is_manager():
         team = _team_managed_by(user)
-        context['requests'] = LeaveRequest.objects.filter(
+        requests_qs = LeaveRequest.objects.filter(
             user__in=team, status='PENDING_MANAGER'
-
-        
         ).select_related('user', 'user__profile', 'user__department')
-        context['manager_approved_notices'] = None
+        context['requests'] = _not_expired(requests_qs, today)
 
+        rejected_qs = LeaveRequest.objects.filter(
+            user__in=team, status='HR_REJECTED_PENDING_MANAGER'
+        ).select_related('user', 'user__profile', 'user__department')
+        context['hr_rejected_pending'] = _not_expired(rejected_qs, today)
 
     else:
         messages.error(request, "You do not have permission to view this page.")
         return redirect('core:dashboard')
 
     return render(request, 'leaves/approvals.html', context)
-
-
-
 
 @login_required
 def review_leave(request, leave_id, decision):
