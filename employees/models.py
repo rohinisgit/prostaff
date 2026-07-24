@@ -76,7 +76,7 @@ class EmployeeProfile(models.Model):
     qualification = models.CharField(max_length=200, blank=True)
     previous_experience = models.CharField(max_length=200, blank=True, help_text="e.g. 2 years at XYZ Corp")
     current_company_experience = models.CharField(max_length=100, blank=True, help_text="e.g. 1.5 years")
-    employment_status = models.CharField(max_length=10, choices=EMPLOYMENT_STATUS_CHOICES, default='PROBATION')
+    employment_status = models.CharField(max_length=10, choices=EMPLOYMENT_STATUS_CHOICES, default='PROBATION', blank=True)
     uan_pf_number = models.CharField(max_length=30, blank=True, verbose_name="UAN / PF Number")
     esi_number = models.CharField(max_length=30, blank=True, verbose_name="ESI Number")
     blood_group = models.CharField(max_length=5, choices=BLOOD_GROUP_CHOICES, blank=True)

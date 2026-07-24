@@ -35,7 +35,7 @@
         <div style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">
           <span class="form-control" style="max-width:110px; background:var(--grey-50); text-align:center; flex-shrink:0; margin-bottom:0;">{{ enrollment_prefix }}</span>
           <input type="text" name="enrollment_suffix" class="form-control" style="margin-bottom:0;"
-                 value="{{ enrollment_suffix }}" placeholder="0001" maxlength="6"
+                 value="{{ enrollment_suffix }}" maxlength="6"
                  oninput="this.value=this.value.replace(/[^0-9]/g,'')">
         </div>
       </div>
@@ -44,7 +44,7 @@
         <div style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">
           <span class="form-control" style="max-width:110px; background:var(--grey-50); text-align:center; flex-shrink:0; margin-bottom:0;">{{ employee_id_prefix }}</span>
           <input type="text" name="employee_id_suffix" class="form-control" style="margin-bottom:0;"
-                 value="{{ employee_id_suffix }}" placeholder="0001" maxlength="6"
+                 value="{{ employee_id_suffix }}" maxlength="6"
                  oninput="this.value=this.value.replace(/[^0-9]/g,'')">
         </div>
       </div>
@@ -109,6 +109,8 @@
       <div><label>Emergency Contact Name</label>{{ identity_form.emergency_contact_name }}</div>
       <div><label>Emergency Contact Phone</label>
         <div style="display:flex; gap:8px; margin-bottom:14px;">{{ identity_form.emergency_contact_country_code }}{{ identity_form.emergency_contact_phone }}</div>
+          {% if identity_form.emergency_contact_phone.errors %}<p style="color:#E4483A; font-size:0.8rem; margin:-10px 0 10px;">{{ identity_form.emergency_contact_phone.errors.0 }}</p>{% endif %}
+        </div>
       </div>
       <div style="grid-column:1 / -1;"><label>Address</label>{{ identity_form.address }}</div>
     </div>
