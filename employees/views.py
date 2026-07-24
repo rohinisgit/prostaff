@@ -109,8 +109,6 @@ def my_profile(request):
         'can_apply_resignation': _can_apply_resignation(request.user),
         'pending_resignation': pending_resignation,
     })
-
-
 @login_required
 def edit_my_profile(request):
     """Employee's own edit page — separate from the read-only my_profile
@@ -136,6 +134,90 @@ def edit_my_profile(request):
         'form': form, 'profile': profile, 'documents': documents, 'doc_form': doc_form,
     })
 
+@hr_admin_or_manager_required
+def edit_employee_profile(request, user_id):
+    emp_user = get_object_or_404(User, id=user_id)
+
+    if not _can_edit_identity(request.user, emp_user):
+        messages.error(request, "You do not have permission to edit this profile.")
+        return redirect('employees:employee_detail', user_id=emp_user.id)
+
+    profile, _ = EmployeeProfile.objects.get_or_create(user=emp_user)
+    bank_detail, _ = BankDetail.objects.get_or_create(user=emp_user)
+
+    employee_id_prefix = employee_id_prefix_for_branch(emp_user.branch)
+    enrollment_prefix = enrollment_prefix_for_branch(emp_user.branch)
+
+    if request.method == 'POST':
+        form = HREmployeeEditForm(request.POST, instance=emp_user)
+        identity_form = EmployeeIdentityForm(request.POST, request.FILES, instance=profile)
+        bank_form = BankDetailForm(request.POST, instance=bank_detail)
+
+        enrollment_suffix = request.POST.get('enrollment_suffix', '').strip()
+        employee_id_suffix = request.POST.get('employee_id_suffix', '').strip()
+
+        saved_anything = False
+        all_valid = True
+
+        if form.is_valid():
+            user_obj = form.save(commit=False)
+            if employee_id_suffix:
+                user_obj.employee_id = f"{employee_id_prefix}{employee_id_suffix}"
+            user_obj.save()
+            if emp_user.role == 'HR':
+                user_obj.accessible_branches.set(form.cleaned_data.get('accessible_branches'))
+            saved_anything = True
+        else:
+            all_valid = False
+            messages.error(request, "Some basic profile fields need fixing — see below.")
+
+        if identity_form.is_valid():
+            profile_obj = identity_form.save(commit=False)
+            if enrollment_suffix:
+                profile_obj.enrollment_id = f"{enrollment_prefix}{enrollment_suffix}"
+            profile_obj.save()
+            saved_anything = True
+        else:
+            all_valid = False
+            messages.error(request, "Some identity fields need fixing — see below.")
+
+        if bank_form.is_valid():
+            bank_form.save()
+            saved_anything = True
+        else:
+            all_valid = False
+            messages.error(request, "Some bank details need fixing — see below.")
+
+        if saved_anything:
+            messages.success(request, f"{emp_user}'s profile has been updated.")
+
+        # Only redirect (clearing the form) once everything validated.
+        # Otherwise fall through and re-render with the bound forms so
+        # the person can see exactly which field(s) are the problem.
+        if all_valid:
+            return redirect('employees:edit_employee_profile', user_id=emp_user.id)
+    else:
+        form = HREmployeeEditForm(instance=emp_user)
+        identity_form = EmployeeIdentityForm(instance=profile)
+        bank_form = BankDetailForm(instance=bank_detail)
+
+    documents = emp_user.documents.all()
+    doc_form = HRDocumentForm()
+    role_form = RoleChangeForm(instance=emp_user, acting_user=request.user)
+    salary_structure, _ = SalaryStructure.objects.get_or_create(user=emp_user, defaults={'basic': 0})
+    salary_form = SalaryStructureForm(instance=salary_structure)
+
+    return render(request, 'employees/edit_employee_profile.html', {
+        'emp_user': emp_user, 'form': form, 'identity_form': identity_form, 'bank_form': bank_form,
+        'documents': documents, 'doc_form': doc_form, 'role_form': role_form,
+        'profile': profile, 'bank_detail': bank_detail, 'salary_form': salary_form,
+        'is_admin_viewer': request.user.role == 'ADMIN',
+        'can_change_role': request.user.role == 'HR',
+        'enrollment_prefix': enrollment_prefix,
+        'employee_id_prefix': employee_id_prefix,
+        'enrollment_suffix': request.POST.get('enrollment_suffix', split_id(profile.enrollment_id, enrollment_prefix)),
+        'employee_id_suffix': request.POST.get('employee_id_suffix', split_id(emp_user.employee_id, employee_id_prefix)),
+    })
 
 @login_required
 def upload_own_document(request):
@@ -342,10 +424,10 @@ def employee_directory(request):
         employees = employees.exclude(role__in=['HR', 'ADMIN'])
     if active_branch:
         employees = employees.filter(
-            Q(branch=active_branch) |
+            Q(branch=active_branch) | 
             Q(role='ADMIN') |
             Q(role='HR', accessible_branches=active_branch)
-        ).distinct()
+            ).distinct()
 
     if query:
         employees = employees.filter(
@@ -514,8 +596,11 @@ def edit_employee_profile(request, user_id):
     profile, _ = EmployeeProfile.objects.get_or_create(user=emp_user)
     bank_detail, _ = BankDetail.objects.get_or_create(user=emp_user)
 
-    enrollment_prefix = enrollment_prefix_for_branch(emp_user.branch)
+    # Prefixes are based on the employee's own branch and are needed both
+    # when saving (to build the full ID from the suffix) and when
+    # rendering the form (to display the prefix + current suffix).
     employee_id_prefix = employee_id_prefix_for_branch(emp_user.branch)
+    enrollment_prefix = enrollment_prefix_for_branch(emp_user.branch)
 
     if request.method == 'POST':
         form = HREmployeeEditForm(request.POST, instance=emp_user)
@@ -546,6 +631,7 @@ def edit_employee_profile(request, user_id):
             saved_anything = True
         else:
             messages.error(request, "Some basic profile fields need fixing — those weren't saved.")
+
         # Identity / extended fields — independent of the other two sections.
         if identity_form.is_valid():
             profile_obj = identity_form.save(commit=False)

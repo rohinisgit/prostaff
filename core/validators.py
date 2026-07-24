@@ -36,6 +36,12 @@ aadhar_validator = RegexValidator(
     regex=r"^[0-9]{12}$",
     message="Aadhar number must be exactly 12 digits."
 )
+numeric_validator = RegexValidator(
+    regex=r"^[0-9]*$",
+    message="Only digits are allowed."
+)
+   
+
 
 # Country codes offered on every phone number field in the app.
 # India is listed first since it's the primary country for this HRMS.

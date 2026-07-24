@@ -46,6 +46,10 @@ AADHAR_ATTRS = {
         ".replace(/(.{4})(?=.)/g, '$1 ')"
     ),
 }
+NUMERIC_ATTRS = {
+    'inputmode': 'numeric',
+    'oninput': "this.value = this.value.replace(/[^0-9]/g, '')",
+}
 
 
 class EmployeeSelfEditForm(forms.ModelForm):
@@ -154,15 +158,11 @@ class NewEmployeeForm(forms.ModelForm):
 
 
 class HREmployeeEditForm(forms.ModelForm):
-    """HR/Admin/Manager edits an employee's core profile details —
-    name, contact info, department, employee ID, joining date.
-    For HR accounts specifically, branch access is multi-select
-    (accessible_branches) instead of a single branch."""
     first_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     last_name = forms.CharField(max_length=150, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     phone_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
     phone = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
-    employee_id = forms.CharField(max_length=20, required=False, validators=[alnum_id_validator], widget=forms.TextInput(attrs={**ID_ATTRS, 'readonly': 'readonly'}))
+    # employee_id removed — it's handled manually via employee_id_suffix in the view
     accessible_branches = forms.ModelMultipleChoiceField(
         queryset=Branch.objects.all().order_by('code'),
         required=False,
@@ -173,7 +173,7 @@ class HREmployeeEditForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'employee_id', 'department', 'branch', 'date_joined_company', 'phone_country_code', 'phone']
+        fields = ['first_name', 'last_name', 'email', 'department', 'branch', 'date_joined_company', 'phone_country_code', 'phone']
         widgets = {'date_joined_company': forms.DateInput(attrs={'type': 'date'})}
 
     def __init__(self, *args, **kwargs):
@@ -189,6 +189,8 @@ class EmployeeIdentityForm(forms.ModelForm):
     the employee's Manager — never editable by the employee themself."""
     aadhar_no = forms.CharField(max_length=14, required=False, validators=[aadhar_validator], widget=forms.TextInput(attrs=AADHAR_ATTRS))
     pan_no = forms.CharField(max_length=10, required=False, validators=[pan_validator], widget=forms.TextInput(attrs=PAN_ATTRS))
+    uan_pf_number = forms.CharField(max_length=30, required=False, widget=forms.TextInput(attrs=NUMERIC_ATTRS))
+    esi_number = forms.CharField(max_length=30, required=False, widget=forms.TextInput(attrs=NUMERIC_ATTRS))
     emergency_contact_name = forms.CharField(max_length=100, required=False, validators=[name_validator], widget=forms.TextInput(attrs=NAME_ATTRS))
     emergency_contact_country_code = forms.ChoiceField(choices=COUNTRY_CODES, required=False, widget=forms.Select(attrs=COUNTRY_CODE_ATTRS))
     emergency_contact_phone = forms.CharField(max_length=10, required=False, validators=[phone_validator], widget=forms.TextInput(attrs=PHONE_ATTRS))
