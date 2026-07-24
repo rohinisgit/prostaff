@@ -85,12 +85,25 @@ class LeaveRequest(models.Model):
     def get_manager(self):
         """The manager who should review this at the manager stage. Only
         relevant for non-manager employees — manager-level requests always
-        skip straight to HR (see initial_status)."""
+        skip straight to HR (see initial_status).
+
+        IMPORTANT: this must stay consistent with core.utils.get_manager_team,
+        which is what actually populates a manager's approvals queue (and
+        the notification badge). That function only includes people in the
+        SAME branch as the manager — so a candidate manager in a different
+        branch is not a valid reviewer here either. Picking one anyway would
+        route the request to PENDING_MANAGER while leaving it permanently
+        invisible to that manager (it would never appear in their queue,
+        and they'd have no way to approve or reject it)."""
         dept = self.user.department
+        candidate = None
         if dept and dept.manager_id and dept.manager_id != self.user_id:
-            return dept.manager
-        if self.user.manager_id and self.user.manager.role == 'MANAGER':
-            return self.user.manager
+            candidate = dept.manager
+        elif self.user.manager_id and self.user.manager.role == 'MANAGER':
+            candidate = self.user.manager
+
+        if candidate and candidate.branch_id == self.user.branch_id:
+            return candidate
         return None
 
     def initial_status(self):
