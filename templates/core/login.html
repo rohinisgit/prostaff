@@ -21,7 +21,7 @@
         {% if form.errors %}
           <ul class="messages"><li class="error">Invalid username or password.</li></ul>
         {% endif %}
-        <form method="post">
+        <form method="post" id="login-form">
           {% csrf_token %}
           <label>Username</label>
           {{ form.username }}
@@ -39,11 +39,12 @@
               </svg>
             </button>
           </div>
+          <label style="display:flex; align-items:center; gap:8px; font-weight:500; margin-bottom:14px; cursor:pointer;">
+            <input type="checkbox" id="remember-me" style="width:auto; margin:0;">
+            Remember Me
+          </label>
           <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">Sign In</button>
         </form>
-        <p style="text-align:center; margin-top:16px; font-size:0.85rem; color:var(--grey-700);">
-          <a href="{% url 'core:password_reset' %}">Forgot your password?</a>
-        </p>
       </div>
     </div>
   </div>
@@ -52,17 +53,55 @@
   (function () {
     var toggleBtn = document.getElementById('password-toggle');
     var passwordInput = document.getElementById('id_password');
+    var usernameInput = document.getElementById('id_username');
+    var rememberCheckbox = document.getElementById('remember-me');
+    var loginForm = document.getElementById('login-form');
     var eyeIcon = document.getElementById('eye-icon');
     var eyeOffIcon = document.getElementById('eye-off-icon');
-    if (!toggleBtn || !passwordInput) return;
 
-    toggleBtn.addEventListener('click', function () {
-      var isPassword = passwordInput.type === 'password';
-      passwordInput.type = isPassword ? 'text' : 'password';
-      eyeIcon.style.display = isPassword ? 'none' : 'block';
-      eyeOffIcon.style.display = isPassword ? 'block' : 'none';
-      toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
-    });
+    var STORAGE_KEY = 'prostaff_remember_me';
+
+    // Show/hide password.
+    if (toggleBtn && passwordInput) {
+      toggleBtn.addEventListener('click', function () {
+        var isPassword = passwordInput.type === 'password';
+        passwordInput.type = isPassword ? 'text' : 'password';
+        eyeIcon.style.display = isPassword ? 'none' : 'block';
+        eyeOffIcon.style.display = isPassword ? 'block' : 'none';
+        toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+      });
+    }
+
+    // On page load, prefill username/password if they were previously
+    // remembered, and tick the checkbox so it reflects that state.
+    try {
+      var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (saved && saved.username) {
+        usernameInput.value = saved.username;
+        passwordInput.value = saved.password || '';
+        rememberCheckbox.checked = true;
+      }
+    } catch (e) {
+      // Ignore malformed/unavailable storage.
+    }
+
+    // On submit, save or clear the credentials depending on the checkbox.
+    if (loginForm) {
+      loginForm.addEventListener('submit', function () {
+        try {
+          if (rememberCheckbox.checked) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+              username: usernameInput.value,
+              password: passwordInput.value,
+            }));
+          } else {
+            localStorage.removeItem(STORAGE_KEY);
+          }
+        } catch (e) {
+          // Ignore storage errors (e.g. private browsing mode).
+        }
+      });
+    }
   })();
 </script>
 </html>
