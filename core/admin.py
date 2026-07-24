@@ -4,7 +4,6 @@ from django.contrib.auth.forms import UserChangeForm
 from django.utils.safestring import mark_safe
 from core.models import User, Department, Branch
 
-admin.site.register(Department)
 admin.site.register(Branch)
 
 
@@ -16,7 +15,14 @@ class SimpleUserChangeForm(UserChangeForm):
         super().__init__(*args, **kwargs)
         if 'password' in self.fields:
             del self.fields['password']
-
+@admin.register(Department)
+class DepartmentAdmin(admin.ModelAdmin):
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        # When a manager is appointed/removed on a department, push that
+        # change onto every employee in it, so leave-request routing
+        # (LeaveRequest.get_manager) always sees the current manager.
+        User.objects.filter(department=obj, role='EMPLOYEE').update(manager=obj.manager)
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):

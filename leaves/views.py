@@ -3,7 +3,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
 from django.db.models import Q
-from core.utils import get_active_branch
+from core.utils import get_active_branch, get_manager_team
+from leaves.utils import not_expired_leaves
 
 from core.models import User
 from leaves.models import LeaveRequest, LeaveBalance, LeaveNotification
@@ -85,19 +86,7 @@ def my_leaves(request):
 
 
 def _team_managed_by(manager):
-    return User.objects.filter(
-        Q(department__manager=manager) |
-        Q(manager=manager, department__manager__isnull=True),
-        branch=manager.branch,
-    ).exclude(id=manager.id).distinct()
-def _not_expired(qs, today):
-    """Excludes permission/leave requests whose date (or end date, for
-    multi-day leave) has already passed — keeps the approvals queue clean
-    of stale entries regardless of their status."""
-    return qs.filter(
-        Q(request_type='PERMISSION', permission_date__gte=today) |
-        Q(request_type='LEAVE', end_date__gte=today)
-    )
+    return get_manager_team(manager)
 
 
 @login_required
@@ -116,8 +105,21 @@ def leave_approvals(request):
         ).select_related('user', 'user__profile', 'user__department', 'reviewed_by_manager')
         if active_branch:
             requests_qs = requests_qs.filter(user__branch=active_branch)
-        requests_qs = _not_expired(requests_qs, today)
+        # NOTE: pending requests stay visible regardless of date. Hiding
+        # them by date is what let overdue requests become permanently
+        # un-actionable. not_expired_leaves is only used below, for
+        # already-APPROVED requests that are still currently in effect.
         context['requests'] = requests_qs
+
+        # Safety net: requests still stuck at PENDING_MANAGER (e.g. no
+        # manager existed for that department at all when submitted).
+        # Scoped to this HR's active branch.
+        stale_manager_qs = LeaveRequest.objects.filter(
+            status='PENDING_MANAGER'
+        ).select_related('user', 'user__profile', 'user__department')
+        if active_branch:
+            stale_manager_qs = stale_manager_qs.filter(user__branch=active_branch)
+        context['stale_manager_requests'] = stale_manager_qs
 
         now_time = timezone.localtime().time()
 
@@ -150,7 +152,6 @@ def leave_approvals(request):
         ).all()
         if active_branch:
             requests_qs = requests_qs.filter(user__branch=active_branch)
-        requests_qs = _not_expired(requests_qs, today)
         context['requests'] = requests_qs
 
     elif user.is_manager():
@@ -158,24 +159,18 @@ def leave_approvals(request):
         requests_qs = LeaveRequest.objects.filter(
             user__in=team, status='PENDING_MANAGER'
         ).select_related('user', 'user__profile', 'user__department')
-    elif user.is_manager():
-            team = _team_managed_by(user)
-            requests_qs = LeaveRequest.objects.filter(
-                user__in=team, status='PENDING_MANAGER'
-            ).select_related('user', 'user__profile', 'user__department')
-            context['requests'] = _not_expired(requests_qs, today)
+        context['requests'] = requests_qs
 
-            rejected_qs = LeaveRequest.objects.filter(
-                reviewed_by_manager=user, status='HR_REJECTED_PENDING_MANAGER'
-            ).select_related('user', 'user__profile', 'user__department')
-            context['hr_rejected_pending'] = _not_expired(rejected_qs, today)
+        rejected_qs = LeaveRequest.objects.filter(
+            reviewed_by_manager=user, status='HR_REJECTED_PENDING_MANAGER'
+        ).select_related('user', 'user__profile', 'user__department')
+        context['hr_rejected_pending'] = rejected_qs
 
     else:
         messages.error(request, "You do not have permission to view this page.")
         return redirect('core:dashboard')
 
     return render(request, 'leaves/approvals.html', context)
-
 @login_required
 def review_leave(request, leave_id, decision):
     user = request.user
@@ -199,12 +194,17 @@ def review_leave(request, leave_id, decision):
         messages.success(request, f"{label} request rejected for {leave.user}.")
         return redirect('leaves:approvals')
 
-    # ---- Stage 1: manager review ----
-    if user.is_manager() and leave.status == 'PENDING_MANAGER':
-        approving_manager = leave.get_manager()
-        if not approving_manager or approving_manager.id != user.id:
-            messages.error(request, "You cannot review this request.")
-            return redirect('leaves:approvals')
+    # ---- Stage 1: manager review (also reachable by HR for requests
+    # stuck at PENDING_MANAGER past their date, since no manager's queue
+    # will ever surface those) ----
+    # ---- Stage 1: manager review (HR can also act on requests stuck at
+    # PENDING_MANAGER — safety net for departments that had no manager) ----
+    if leave.status == 'PENDING_MANAGER' and (user.is_manager() or user.role == 'HR'):
+        if user.is_manager():
+            approving_manager = leave.get_manager()
+            if not approving_manager or approving_manager.id != user.id:
+                messages.error(request, "You cannot review this request.")
+                return redirect('leaves:approvals')
 
         leave.reviewed_by_manager = user
         leave.manager_reviewed_at = timezone.now()

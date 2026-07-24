@@ -65,6 +65,31 @@
 {% empty %}
 <div class="card"><p class="empty-state">No leave requests.</p></div>
 {% endfor %}
+{% if stale_manager_requests %}
+<div class="card" style="border-left:4px solid var(--sunset-orange); background:#FFF7F2; margin-top:20px;">
+  <h3>Stuck Requests — No Manager Action Possible</h3>
+  <p style="color:var(--grey-700); font-size:0.85rem; margin-top:0;">
+    These were submitted while there was no manager to review them, and their date has already passed.
+    Review them here directly.
+  </p>
+  {% for r in stale_manager_requests %}
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:12px 0; {% if not forloop.last %}border-bottom:1px solid var(--grey-100);{% endif %}">
+    <div>
+      <p style="margin:0; font-weight:600;">{{ r.user.get_full_name|default:r.user.username }}</p>
+      <p style="margin:2px 0 0; color:var(--grey-500); font-size:0.82rem;">
+        {{ r.get_request_type_display }}{% if r.request_type == 'LEAVE' %} &middot; {{ r.get_leave_type_display }}{% endif %} &middot;
+        {% if r.request_type == 'PERMISSION' %}{{ r.permission_date }}{% else %}{{ r.start_date }} - {{ r.end_date }}{% endif %}
+      </p>
+      <p style="margin:4px 0 0; font-size:0.85rem;">{{ r.reason|default:"-"|truncatewords:12 }}</p>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <a href="{% url 'leaves:review_leave' r.id 'reject' %}" class="btn btn-outline btn-sm">Reject</a>
+      <a href="{% url 'leaves:review_leave' r.id 'approve' %}" class="btn btn-primary btn-sm">Approve</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 
 {% if hr_rejected_pending %}
 <div class="card" style="border-left:4px solid #E4483A; background:#FFF7F2; margin-top:20px;">

@@ -618,6 +618,13 @@ def edit_employee_profile(request, user_id):
             user_obj = form.save(commit=False)
             if employee_id_suffix:
                 user_obj.employee_id = f"{employee_id_prefix}{employee_id_suffix}"
+
+            # Keep `manager` in sync with the current department so leave
+            # routing never falls back to a stale/old manager reference.
+            if user_obj.role != User.ROLE_MANAGER:
+                dept = form.cleaned_data.get('department')
+                user_obj.manager = dept.manager if (dept and dept.manager_id) else None
+
             user_obj.save()
             if emp_user.role == 'HR':
                 user_obj.accessible_branches.set(form.cleaned_data.get('accessible_branches'))

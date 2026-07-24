@@ -1,9 +1,7 @@
 def get_active_branch(request):
     from core.models import Branch
-
     user = request.user
     can_switch = user_can_switch_branch(user)
-
     if not can_switch:
         return getattr(user, 'branch', None)
 
@@ -20,12 +18,22 @@ def get_active_branch(request):
         return user.branch or Branch.objects.first()
     return user.branch or user.accessible_branches.first()
 
-
 def user_can_switch_branch(user):
     if not user.is_authenticated:
         return False
     if user.role == 'ADMIN':
         return True
     if user.role == 'HR':
-        return user.accessible_branches.exists()
+        return user.can_access_all_branches or user.accessible_branches.exists()
     return False
+def get_manager_team(manager):
+    """Everyone reporting to this manager, either via department headship
+    or a direct manager link (used when a department has no head), scoped
+    to the manager's branch."""
+    from django.db.models import Q
+    from core.models import User
+    return User.objects.filter(
+        Q(department__manager=manager) |
+        Q(manager=manager, department__manager__isnull=True),
+        branch=manager.branch,
+    ).exclude(id=manager.id).distinct()

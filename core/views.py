@@ -9,16 +9,15 @@ from attendance.models import AttendanceRecord
 from leaves.models import LeaveRequest
 from employees.models import EmployeeProfile
 from django.contrib import messages
-from core.utils import get_active_branch, user_can_switch_branch
+from core.utils import get_active_branch, user_can_switch_branch, get_manager_team
 from core.models import Branch
-
-
 
 
 class HRLoginView(auth_views.LoginView):
     template_name = 'core/login.html'
     authentication_form = StyledAuthenticationForm
     redirect_authenticated_user = True
+
 
 @login_required
 def set_active_branch(request):
@@ -39,6 +38,7 @@ def set_active_branch(request):
                 messages.error(request, "You don't have access to that branch.")
         return redirect(request.POST.get('next') or 'core:dashboard')
     return redirect('core:dashboard')
+
 
 @login_required
 def dashboard(request):
@@ -70,8 +70,17 @@ def dashboard(request):
         context['month_attendance'] = AttendanceRecord.objects.filter(
             user=user, date__gte=month_start, date__lte=today
         ).count()
-        context['my_pending_leaves'] = LeaveRequest.objects.filter(user=user, status='PENDING').count()
+        # 'PENDING' is not a valid status (choices are PENDING_MANAGER /
+        # PENDING_HR / etc.) — this used to always evaluate to 0.
+        context['my_pending_leaves'] = LeaveRequest.objects.filter(
+            user=user, status__in=['PENDING_MANAGER', 'PENDING_HR']
+        ).count()
         if user.is_manager():
-            context['team_size'] = user.team_members.exclude(id=user.id).count()
+            # Use the same team definition as the approvals queue and
+            # notification badge (department-headed reports + direct
+            # reports, scoped to the manager's branch) instead of the raw
+            # `manager` FK, so this number always matches what the manager
+            # actually sees in their approvals list.
+            context['team_size'] = get_manager_team(user).count()
 
     return render(request, 'core/dashboard.html', context)
