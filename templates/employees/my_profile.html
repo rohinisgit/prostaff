@@ -9,10 +9,11 @@
       {% elif pending_resignation.status == 'NEGOTIATING' %}
       <span class="badge badge-info">HR Has Sent You an Offer — See Below</span>
       {% elif profile.status != 'EXITED' %}
+      <a href="{% url 'employees:edit_my_profile' %}" class="btn btn-accent">Edit Profile</a>
       <a href="{% url 'employees:apply_resignation' %}" class="btn btn-danger">Apply for Resignation</a>
       {% endif %}
     {% endif %}
-    <a href="{% url 'employees:edit_my_profile' %}" class="btn btn-accent">Edit Profile</a>
+    
   </div>
 </div>
 

@@ -381,12 +381,11 @@ def generate_team_monthly_excel(summaries, year, month):
         col += 1
     day_end_col = col
 
-    summary_values = [
-            summary['total_days_worked'], summary['cl_quota'], float(summary['overtime_hours']),
-            float(summary['sunday_hours']), float(summary['total_hours_worked']),
-            summary['actual_leave'], summary['total_ph_sunday'], float(summary['total_days_to_pay']),
-            summary['days_in_month'], summary['lop'], float(summary.get('salary') or 0),
-        ]
+    summary_headers = [
+        'Days Worked', 'CL', 'Overtime (hrs)', 'Sunday Hrs', 'Total Hrs',
+        'Actual Leave', 'PH/Sunday', 'Total Days to Pay', 'Days in Month',
+        'LOP', 'Salary',
+    ]
     summary_start_col = col
     for h in summary_headers:
         c = ws.cell(row=header_row, column=col, value=h)
@@ -420,10 +419,10 @@ def generate_team_monthly_excel(summaries, year, month):
             col += 1
 
         summary_values = [
-            summary['total_days_worked'], summary['cl_quota'], summary['on_duty'],
+            summary['total_days_worked'], summary['cl_quota'], float(summary['overtime_hours']),
             float(summary['sunday_hours']), float(summary['total_hours_worked']),
-            summary['wkd'], summary['actual_leave'], summary['lop'],
-            summary['total_ph_sunday'], summary['days_in_month'], summary['night_duty'],
+            summary['actual_leave'], summary['total_ph_sunday'], float(summary['total_days_to_pay']),
+            summary['days_in_month'], summary['lop'], float(summary.get('salary') or 0),
         ]
         for v in summary_values:
             c = ws.cell(row=row, column=col, value=v)
